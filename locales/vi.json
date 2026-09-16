@@ -1,0 +1,55 @@
+{
+  "nav": {
+    "dashboard": "Tổng quan",
+    "channels": "Kênh YouTube",
+    "content": "Nội dung",
+    "niches": "Chủ đề",
+    "research": "Nghiên cứu",
+    "accounts": "Tài khoản",
+    "profiles": "Hồ sơ",
+    "alerts": "Cảnh báo",
+    "reports": "Báo cáo",
+    "settings": "Cài đặt"
+  },
+  "actions": {
+    "addChannel": "Thêm kênh",
+    "edit": "Chỉnh sửa",
+    "delete": "Xóa",
+    "archive": "Lưu trữ",
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "search": "Tìm kiếm",
+    "filter": "Bộ lọc",
+    "sync": "Đồng bộ dữ liệu",
+    "syncing": "Đang đồng bộ...",
+    "fetchYouTube": "Lấy thông tin từ YouTube",
+    "connectYouTube": "Kết nối YouTube"
+  },
+  "status": {
+    "purchased": "Đã mua",
+    "setup": "Đang thiết lập",
+    "warm_up": "Đang ngâm",
+    "active": "Đang hoạt động",
+    "paused": "Tạm dừng",
+    "warning": "Cảnh báo",
+    "suspended": "Bị đình chỉ",
+    "dead": "Đã chết"
+  },
+  "health": {
+    "healthy": "Bình thường",
+    "attention": "Cần chú ý",
+    "critical": "Nguy hiểm",
+    "unknown": "Chưa xác định"
+  },
+  "messages": {
+    "channelAdded": "Đã thêm kênh mới",
+    "channelUpdated": "Đã cập nhật kênh thành công",
+    "syncSuccess": "Đã đồng bộ dữ liệu YouTube",
+    "syncFailed": "Không thể đồng bộ dữ liệu YouTube",
+    "invalidUrl": "URL YouTube không hợp lệ.",
+    "notFound": "Không tìm thấy kênh YouTube.",
+    "quotaExceeded": "API YouTube đã vượt giới hạn sử dụng.",
+    "unauthorizedAnalytics": "Không có quyền truy cập dữ liệu Analytics.",
+    "expiredConnection": "Phiên kết nối YouTube đã hết hạn."
+  }
+}

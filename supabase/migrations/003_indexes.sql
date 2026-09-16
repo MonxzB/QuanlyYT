@@ -1,0 +1,16 @@
+create index channels_youtube_channel_id_idx on public.channels (youtube_channel_id);
+create index channels_status_idx on public.channels (status);
+create index channels_niche_id_idx on public.channels (niche_id);
+create index channels_owner_id_idx on public.channels (owner_id);
+create index channels_last_synced_at_idx on public.channels (last_synced_at desc nulls last);
+create index videos_youtube_video_id_idx on public.videos (youtube_video_id);
+create index videos_channel_id_idx on public.videos (channel_id);
+create index videos_reference_channel_id_idx on public.videos (reference_channel_id);
+create index videos_published_at_idx on public.videos (published_at desc);
+create index channel_metrics_channel_id_idx on public.channel_metrics (channel_id);
+create index channel_metrics_metric_date_idx on public.channel_metrics (metric_date desc);
+create index alerts_channel_id_idx on public.alerts (channel_id);
+create index alerts_open_idx on public.alerts (is_resolved, created_at desc);
+create unique index alerts_active_type_idx on public.alerts (channel_id, type) where is_resolved = false;
+create index reference_channels_niche_id_idx on public.reference_channels (niche_id);
+create index activity_logs_created_at_idx on public.activity_logs (created_at desc);

@@ -1,0 +1,55 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "channels": "YouTube Channels",
+    "content": "Content",
+    "niches": "Niches",
+    "research": "Research",
+    "accounts": "Accounts",
+    "profiles": "Profiles",
+    "alerts": "Alerts",
+    "reports": "Reports",
+    "settings": "Settings"
+  },
+  "actions": {
+    "addChannel": "Add channel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "archive": "Archive",
+    "save": "Save",
+    "cancel": "Cancel",
+    "search": "Search",
+    "filter": "Filter",
+    "sync": "Sync data",
+    "syncing": "Syncing...",
+    "fetchYouTube": "Fetch from YouTube",
+    "connectYouTube": "Connect YouTube"
+  },
+  "status": {
+    "purchased": "Purchased",
+    "setup": "Setup",
+    "warm_up": "Warm-up",
+    "active": "Active",
+    "paused": "Paused",
+    "warning": "Warning",
+    "suspended": "Suspended",
+    "dead": "Dead"
+  },
+  "health": {
+    "healthy": "Healthy",
+    "attention": "Attention",
+    "critical": "Critical",
+    "unknown": "Unknown"
+  },
+  "messages": {
+    "channelAdded": "Channel added successfully",
+    "channelUpdated": "Channel updated successfully",
+    "syncSuccess": "YouTube data synchronized",
+    "syncFailed": "Unable to synchronize YouTube data",
+    "invalidUrl": "Invalid YouTube URL.",
+    "notFound": "YouTube channel not found.",
+    "quotaExceeded": "YouTube API quota exceeded.",
+    "unauthorizedAnalytics": "Analytics access was not granted.",
+    "expiredConnection": "YouTube connection expired."
+  }
+}

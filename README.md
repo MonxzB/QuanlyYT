@@ -1,6 +1,6 @@
 # ChannelOS
 
-Ứng dụng cá nhân để quản lý và theo dõi các kênh YouTube, dùng Next.js/Vinext, Supabase Postgres/Auth và YouTube Data API v3.
+Ứng dụng cá nhân để quản lý và theo dõi các kênh YouTube, dùng Next.js, Supabase Postgres/Auth và YouTube Data API v3.
 
 ## Chức năng
 

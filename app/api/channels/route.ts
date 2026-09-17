@@ -15,21 +15,24 @@ const createSchema = z.object({
   notes: z.string().max(4000).nullish(),
 });
 
+const listSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(500).default(100),
+  search: z.string().trim().max(100).optional(),
+  status: z.enum(["purchased", "setup", "warm_up", "active", "paused", "warning", "suspended", "dead"]).optional(),
+  nicheId: z.string().uuid().optional(),
+});
+
 export async function GET(request: Request) {
   try {
     await requireApiUser();
     const url = new URL(request.url);
-    const result = await listChannels({
-      page: Number(url.searchParams.get("page") || 1),
-      pageSize: Number(url.searchParams.get("pageSize") || 20),
-      search: url.searchParams.get("search") || undefined,
-      status: url.searchParams.get("status") || undefined,
-      nicheId: url.searchParams.get("nicheId") || undefined,
-    });
+    const input = listSchema.parse(Object.fromEntries(url.searchParams));
+    const result = await listChannels(input);
     return NextResponse.json(result);
   } catch (error) {
     const payload = publicError(error);
-    return NextResponse.json(payload, { status: statusOf(error) });
+    return NextResponse.json(payload, { status: error instanceof z.ZodError ? 400 : statusOf(error) });
   }
 }
 

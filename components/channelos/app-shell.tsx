@@ -6,7 +6,7 @@ import { AlertTriangle, Bell, BookOpenText, CirclePlay, FolderKanban, Globe2, La
 import { useRouter } from "next/navigation";
 import { toast, Toaster } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarRail, SidebarTrigger } from "@/components/ui/sidebar";
+import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarRail, SidebarTrigger } from "@/components/ui/sidebar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { t } from "@/lib/i18n";
@@ -48,8 +48,28 @@ export function AppShell({ dashboard, channels, workspace, user }: { dashboard: 
     : page === "profiles" ? <ProfilesView data={workspace} />
     : page === "alerts" ? <AlertsView data={workspace} />
     : <SettingsView />;
-  return <SidebarProvider><Sidebar collapsible="icon" className="border-r border-slate-200 bg-[#fbfcfe]"><SidebarHeader className="border-b border-slate-200 p-3"><div className="flex h-12 items-center gap-2.5 px-2"><span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-indigo-600 text-white"><CirclePlay className="size-[18px]" /></span><div className="group-data-[collapsible=icon]:hidden"><p className="text-[15px] font-semibold">ChannelOS</p><p className="text-xs text-slate-500">Quản lý mạng lưới</p></div></div></SidebarHeader><SidebarContent className="px-2 py-3"><SidebarGroup className="p-0"><SidebarGroupContent><SidebarMenu className="gap-1">{nav.map((item) => <SidebarMenuItem key={item.id}><SidebarMenuButton onClick={() => setPage(item.id)} tooltip={item.label} isActive={page === item.id} className="h-10 rounded-[10px] px-3 text-[14px] font-medium text-slate-600 data-[active=true]:bg-indigo-50 data-[active=true]:text-indigo-700"><item.icon className="size-[18px]" /><span>{item.label}</span>{item.id === "alerts" && workspace.alerts.filter((alert) => !alert.is_resolved).length > 0 && <span className="ml-auto rounded-full bg-red-50 px-2 text-xs font-semibold text-red-600">{workspace.alerts.filter((alert) => !alert.is_resolved).length}</span>}</SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent><SidebarFooter className="border-t border-slate-200 p-2"><SidebarMenu><SidebarMenuItem><SidebarMenuButton onClick={() => setPage("settings")} isActive={page === "settings"} tooltip="Cài đặt"><Settings /><span>Cài đặt</span></SidebarMenuButton></SidebarMenuItem><SidebarMenuItem><SidebarMenuButton onClick={() => void signOut()} tooltip="Đăng xuất" className="h-12"><span className="grid size-8 place-items-center rounded-full bg-slate-900 text-xs font-bold text-white">{user.name.slice(0, 1).toUpperCase()}</span><span className="grid text-left"><span className="truncate text-sm font-semibold">{user.name}</span><span className="text-xs text-slate-500">{roleLabel(user.role)}</span></span><LogOut className="ml-auto size-4" /></SidebarMenuButton></SidebarMenuItem></SidebarMenu></SidebarFooter><SidebarRail /></Sidebar>
-    <SidebarInset className="min-w-0 bg-white"><header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur md:px-6"><SidebarTrigger className="size-9 rounded-lg border border-slate-200" /><div className="min-w-0 flex-1"><h1 className="truncate text-lg font-semibold text-slate-950">{pageTitle(page)}</h1></div></header><main className="mx-auto min-h-[calc(100vh-64px)] w-full max-w-[1600px] bg-[#f8fafc] p-4 md:p-6 lg:p-8">{content}</main></SidebarInset><Toaster richColors position="bottom-right" /></SidebarProvider>;
+  return <SidebarProvider>
+    <Sidebar collapsible="icon" className="border-r border-slate-200 bg-[#fbfcfe]">
+      <SidebarHeader className="border-b border-slate-200 p-3"><div className="flex h-12 items-center gap-2.5 px-2"><span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-indigo-600 text-white"><CirclePlay className="size-[18px]" /></span><div className="group-data-[collapsible=icon]:hidden"><p className="text-[15px] font-semibold">ChannelOS</p><p className="text-xs text-slate-500">Quản lý mạng lưới</p></div></div></SidebarHeader>
+      <SidebarContent className="px-2 py-3"><SidebarGroup className="p-0"><SidebarGroupContent><SidebarMenu className="gap-1">{nav.map((item) => <SidebarMenuItem key={item.id}><SidebarMenuButton onClick={() => setPage(item.id)} tooltip={item.label} isActive={page === item.id} className="h-10 rounded-[10px] px-3 text-[14px] font-medium text-slate-600 data-[active=true]:bg-indigo-50 data-[active=true]:text-indigo-700"><item.icon className="size-[18px]" /><span>{item.label}</span>{item.id === "alerts" && workspace.alerts.filter((alert) => !alert.is_resolved).length > 0 && <span className="ml-auto rounded-full bg-red-50 px-2 text-xs font-semibold text-red-600">{workspace.alerts.filter((alert) => !alert.is_resolved).length}</span>}</SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent>
+      <SidebarRail />
+    </Sidebar>
+    <SidebarInset className="min-w-0 bg-white">
+      <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur md:px-6">
+        <SidebarTrigger className="size-9 rounded-lg border border-slate-200" />
+        <div className="min-w-0 flex-1"><h1 className="truncate text-lg font-semibold text-slate-950">{pageTitle(page)}</h1></div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Button type="button" variant={page === "settings" ? "secondary" : "ghost"} size="sm" onClick={() => setPage("settings")} title="Cài đặt" className="gap-2"><Settings className="size-4" /><span className="hidden md:inline">Cài đặt</span></Button>
+          <span className="mx-1 hidden h-8 w-px bg-slate-200 sm:block" />
+          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-slate-900 text-xs font-bold text-white">{user.name.slice(0, 1).toUpperCase()}</span>
+          <span className="hidden min-w-0 max-w-40 text-left sm:grid"><span className="truncate text-sm font-semibold text-slate-900">{user.name}</span><span className="text-xs text-slate-500">{roleLabel(user.role)}</span></span>
+          <Button type="button" variant="ghost" size="icon-sm" onClick={() => void signOut()} title="Đăng xuất"><LogOut className="size-4" /></Button>
+        </div>
+      </header>
+      <main className="min-h-[calc(100vh-64px)] w-full max-w-none bg-[#f8fafc] p-3 md:p-4 lg:p-5">{content}</main>
+    </SidebarInset>
+    <Toaster richColors position="bottom-right" />
+  </SidebarProvider>;
 }
 
 function Title({ title, description }: { title: string; description: string }) { return <div><h2 className="text-2xl font-semibold tracking-tight text-slate-950">{title}</h2><p className="mt-1 text-sm text-slate-500">{description}</p></div>; }

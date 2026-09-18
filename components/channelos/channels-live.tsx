@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, CirclePlay as Youtube, ExternalLink, Eye, EyeOff, FileSpreadsheet, GripVertical, LoaderCircle, Minus, Pencil, Plus, RefreshCw, Search, Trash2, TrendingDown, TrendingUp, Upload } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, CirclePlay as Youtube, ExternalLink, Eye, EyeOff, FileSpreadsheet, GripVertical, LoaderCircle, Minus, Pencil, Plus, RefreshCw, Search, Trash2, TrendingDown, TrendingUp, Upload, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,29 @@ type ChannelsLiveProps = {
 type SortKey = "channel" | "email" | "recoveryEmail" | "phone" | "status" | "niche" | "subscribers" | "views" | "videos" | "lastVideo";
 type SortDirection = "asc" | "desc";
 type ChannelBoardRow = { kind: "channel"; channel: Channel } | { kind: "account"; account: Account };
+type VideoViewScanProgress = { done: boolean; processedVideos: number; totalViews: number };
+type SyncFailure = { id: string; name: string; stage: "Đồng bộ dữ liệu" | "Quét lượt xem"; error: string };
+
+async function runVideoViewScan(channelId: string, onProgress?: (progress: VideoViewScanProgress) => void): Promise<VideoViewScanProgress> {
+  let action: "start" | "continue" = "start";
+  let progress: VideoViewScanProgress = { done: false, processedVideos: 0, totalViews: 0 };
+  let batchCount = 0;
+  while (!progress.done && batchCount < 500) {
+    const response = await fetch(`/api/channels/${channelId}/video-views/scan`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    const body = await response.json() as { data?: VideoViewScanProgress; error?: string };
+    if (!response.ok || !body.data) throw new Error(body.error || "Không thể quét lượt xem video.");
+    progress = body.data;
+    onProgress?.(progress);
+    action = "continue";
+    batchCount += 1;
+  }
+  if (!progress.done) throw new Error("Đã dừng sau 25.000 video để tránh vòng lặp ngoài ý muốn.");
+  return progress;
+}
 
 export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canManage, canDelete, canRevealCredentials }: ChannelsLiveProps) {
   const router = useRouter();
@@ -42,6 +65,7 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
   const [loading, setLoading] = useState(false);
   const [syncingAll, setSyncingAll] = useState(false);
   const [scanningViewsId, setScanningViewsId] = useState<string | null>(null);
+  const [syncFailures, setSyncFailures] = useState<SyncFailure[]>([]);
   const [addOpen, setAddOpen] = useState(false);
   const [addAccountOpen, setAddAccountOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -126,6 +150,7 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
 
   const syncAll = async () => {
     setSyncingAll(true);
+    setSyncFailures([]);
     const toastId = toast.loading("Đang đồng bộ các kênh hoạt động…");
     try {
       const before = new Date().toISOString();
@@ -133,6 +158,9 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
       let processed = 0;
       let succeeded = 0;
       let failed = 0;
+      let viewScanned = 0;
+      let viewScanFailed = 0;
+      const failures: SyncFailure[] = [];
       let hasMore = true;
       let batchCount = 0;
       while (hasMore && batchCount < 200) {
@@ -141,21 +169,32 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ before, limit: 3, excludedIds: Array.from(attemptedIds) }),
         });
-        const body = await response.json() as { data?: { processed: number; succeeded: number; failed: number; attemptedIds: string[]; hasMore: boolean }; error?: string };
+        const body = await response.json() as { data?: { processed: number; succeeded: number; failed: number; attemptedIds: string[]; hasMore: boolean; results: Array<{ id: string; name: string; ok: boolean; error?: string }> }; error?: string };
         if (!response.ok || !body.data) throw new Error(body.error || "Không thể đồng bộ tất cả kênh.");
         body.data.attemptedIds.forEach((id) => attemptedIds.add(id));
         processed += body.data.processed;
         succeeded += body.data.succeeded;
         failed += body.data.failed;
+        failures.push(...body.data.results.filter((item) => !item.ok).map((item) => ({ id: item.id, name: item.name, stage: "Đồng bộ dữ liệu" as const, error: item.error || "Không xác định được nguyên nhân." })));
+        for (const item of body.data.results.filter((resultItem) => resultItem.ok)) {
+          try {
+            await runVideoViewScan(item.id, (progress) => {
+              toast.loading(`Đã đồng bộ ${processed} kênh · đang quét view video ${progress.processedVideos.toLocaleString("vi-VN")}…`, { id: toastId });
+            });
+            viewScanned += 1;
+          } catch (scanError) {
+            viewScanFailed += 1;
+            failures.push({ id: item.id, name: item.name, stage: "Quét lượt xem", error: scanError instanceof Error ? scanError.message : "Không xác định được nguyên nhân." });
+          }
+        }
         hasMore = body.data.hasMore && body.data.processed > 0;
         batchCount += 1;
-        toast.loading(`Đang đồng bộ… ${processed} kênh đã xử lý.`, { id: toastId });
+        toast.loading(`Đang đồng bộ… ${processed} kênh đã xử lý · ${viewScanned} kênh đã quét view.`, { id: toastId });
       }
       if (batchCount >= 200 && hasMore) throw new Error("Đã dừng sau 200 batch để tránh vòng lặp đồng bộ ngoài ý muốn.");
-      const message = failed
-        ? `Đồng bộ xong ${succeeded}/${processed} kênh; ${failed} kênh lỗi.`
-        : `Đã đồng bộ ${succeeded} kênh.`;
-      if (failed) toast.warning(message, { id: toastId });
+      const message = `Đã đồng bộ ${succeeded}/${processed} kênh · quét view ${viewScanned}/${succeeded}${viewScanFailed ? `; ${viewScanFailed} kênh quét view lỗi` : ""}.`;
+      setSyncFailures(failures);
+      if (failed || viewScanFailed) toast.warning(message, { id: toastId });
       else toast.success(message, { id: toastId });
       await fetchPage(result.page);
     } catch (error) {
@@ -166,31 +205,13 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
   };
 
   const scanVideoViews = async (channel: Channel) => {
-    if (scanningViewsId) return;
+    if (scanningViewsId || syncingAll) return;
     setScanningViewsId(channel.id);
     const toastId = toast.loading(`Đang quét toàn bộ video của ${channel.name}…`);
     try {
-      let action: "start" | "continue" = "start";
-      let done = false;
-      let batchCount = 0;
-      let processedVideos = 0;
-      let totalViews = 0;
-      while (!done && batchCount < 500) {
-        const response = await fetch(`/api/channels/${channel.id}/video-views/scan`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action }),
-        });
-        const body = await response.json() as { data?: { done: boolean; processedVideos: number; totalViews: number }; error?: string };
-        if (!response.ok || !body.data) throw new Error(body.error || "Không thể quét lượt xem video.");
-        done = body.data.done;
-        processedVideos = body.data.processedVideos;
-        totalViews = body.data.totalViews;
-        action = "continue";
-        batchCount += 1;
-        toast.loading(`Đã quét ${processedVideos.toLocaleString("vi-VN")} video · ${compactNumber(totalViews)} lượt xem`, { id: toastId });
-      }
-      if (!done) throw new Error("Đã dừng sau 25.000 video để tránh vòng lặp ngoài ý muốn.");
+      const { processedVideos, totalViews } = await runVideoViewScan(channel.id, (progress) => {
+        toast.loading(`Đã quét ${progress.processedVideos.toLocaleString("vi-VN")} video · ${compactNumber(progress.totalViews)} lượt xem`, { id: toastId });
+      });
       toast.success(`Hoàn tất: ${processedVideos.toLocaleString("vi-VN")} video · ${totalViews.toLocaleString("vi-VN")} lượt xem.`, { id: toastId });
       await fetchPage(result.page);
     } catch (error) {
@@ -249,6 +270,7 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
       <div><h2 className="text-2xl font-semibold tracking-tight text-slate-950">Kênh YouTube</h2><p className="mt-1 text-sm text-slate-500">Kéo biểu tượng bên trái để sắp xếp chung kênh và tài khoản chưa có kênh.</p></div>
       {canManage && <div className="flex flex-wrap gap-2">{canDelete && <Button variant="outline" onClick={() => void syncAll()} disabled={syncingAll}>{syncingAll ? <LoaderCircle className="animate-spin" /> : <RefreshCw />} Đồng bộ tất cả</Button>}<Button variant="outline" onClick={() => setImportOpen(true)}><FileSpreadsheet /> Nhập Excel</Button><Button variant="outline" onClick={() => setAddAccountOpen(true)}><Plus /> Thêm tài khoản</Button><Button onClick={() => { setPendingAccountId(""); setAddOpen(true); }} className="bg-indigo-600 hover:bg-indigo-700"><Plus /> Thêm kênh</Button></div>}
     </div>
+    {syncFailures.length > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950"><div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" /><div className="min-w-0 flex-1"><p className="font-semibold">{syncFailures.length} kênh cần kiểm tra lại</p><div className="mt-2 space-y-1.5">{syncFailures.map((failure) => <div key={`${failure.id}-${failure.stage}`} className="text-sm"><span className="font-semibold">{failure.name}</span><span className="text-amber-700"> · {failure.stage}: {failure.error}</span></div>)}</div></div><Button type="button" variant="ghost" size="icon-sm" onClick={() => setSyncFailures([])} title="Đóng thông báo" className="shrink-0 text-amber-700 hover:bg-amber-100"><X /></Button></div></div>}
     <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-3"><div className="relative min-w-60 flex-1"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm theo tên, handle hoặc Channel ID…" className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none focus:border-indigo-300 focus:bg-white" /></div><select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="">Tất cả trạng thái</option>{statuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{sortKey && <Button type="button" variant="ghost" onClick={() => { setSortKey(null); setSortDirection("asc"); }}>Bỏ sắp xếp</Button>}</div>
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
       <Table className="min-w-[1600px] table-fixed">

@@ -243,7 +243,7 @@ export async function syncAllChannels(actorId: string, input: { before: string; 
   const admin = createSupabaseAdminClient();
   const limit = Math.min(5, Math.max(1, input.limit ?? 3));
   let query = admin.from("channels")
-    .select("id")
+    .select("id,name")
     .not("status", "in", '("paused","dead","suspended")')
     .or(`last_synced_at.is.null,last_synced_at.lt.${input.before}`)
     .order("last_synced_at", { ascending: true, nullsFirst: true })
@@ -252,10 +252,10 @@ export async function syncAllChannels(actorId: string, input: { before: string; 
   const { data, error } = await query;
   if (error) throw error;
   const channels = (data ?? []).slice(0, limit);
-  const results: Array<{ id: string; ok: boolean; error?: string }> = [];
+  const results: Array<{ id: string; name: string; ok: boolean; error?: string }> = [];
   await Promise.all(channels.map(async (channel) => {
-    try { await syncChannel(channel.id, actorId); results.push({ id: channel.id, ok: true }); }
-    catch (syncError) { results.push({ id: channel.id, ok: false, error: syncError instanceof Error ? syncError.message : "Lỗi không xác định" }); }
+    try { await syncChannel(channel.id, actorId); results.push({ id: channel.id, name: channel.name, ok: true }); }
+    catch (syncError) { results.push({ id: channel.id, name: channel.name, ok: false, error: syncError instanceof AppError ? syncError.message : "Không thể đồng bộ dữ liệu kênh." }); }
   }));
   return {
     processed: results.length,

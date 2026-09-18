@@ -180,12 +180,19 @@ async function updateAlerts(channel: Channel, previous: Channel | null) {
   if (resolveError) throw resolveError;
 }
 
-export async function syncChannel(id: string, actorId: string): Promise<{ channel: Channel; syncedVideos: number }> {
+export async function syncChannel(id: string, actorId: string): Promise<{ channel: Channel; syncedVideos: number; videoPlaylistAvailable: boolean; warning?: string }> {
   const admin = createSupabaseAdminClient();
   const { data: current, error: currentError } = await admin.from("channels").select("*").eq("id", id).single();
   if (currentError || !current) throw new AppError("CHANNEL_NOT_FOUND", "Không tìm thấy kênh.", 404);
   const youtube = await getYouTubeChannelById(current.youtube_channel_id);
-  const videos = await getPlaylistVideos(youtube.uploadsPlaylistId);
+  let videos: Awaited<ReturnType<typeof getPlaylistVideos>> = [];
+  let playlistWarning: string | undefined;
+  try {
+    videos = await getPlaylistVideos(youtube.uploadsPlaylistId);
+  } catch (videoError) {
+    if (!(videoError instanceof AppError) || videoError.code !== "YOUTUBE_PLAYLIST_NOT_FOUND") throw videoError;
+    playlistWarning = videoError.message;
+  }
   const now = new Date().toISOString();
   const lastVideoAt = videos[0]?.publishedAt ?? current.last_video_at;
   const { data: updated, error: updateError } = await admin.from("channels").update({
@@ -235,8 +242,8 @@ export async function syncChannel(id: string, actorId: string): Promise<{ channe
   }, { onConflict: "channel_id,metric_date" });
   if (metricError) throw metricError;
   await updateAlerts(updated as unknown as Channel, current as Channel);
-  await admin.from("activity_logs").insert({ user_id: actorId, channel_id: id, action: "channel.synced", entity_type: "channel", entity_id: id, new_data: { videos: videos.length } });
-  return { channel: updated as unknown as Channel, syncedVideos: videos.length };
+  await admin.from("activity_logs").insert({ user_id: actorId, channel_id: id, action: "channel.synced", entity_type: "channel", entity_id: id, new_data: { videos: videos.length, playlist_warning: playlistWarning ?? null } });
+  return { channel: updated as unknown as Channel, syncedVideos: videos.length, videoPlaylistAvailable: !playlistWarning, ...(playlistWarning ? { warning: playlistWarning } : {}) };
 }
 
 export async function syncAllChannels(actorId: string, input: { before: string; limit?: number; excludedIds?: string[] }) {
@@ -252,9 +259,12 @@ export async function syncAllChannels(actorId: string, input: { before: string; 
   const { data, error } = await query;
   if (error) throw error;
   const channels = (data ?? []).slice(0, limit);
-  const results: Array<{ id: string; name: string; ok: boolean; error?: string }> = [];
+  const results: Array<{ id: string; name: string; ok: boolean; videoPlaylistAvailable?: boolean; warning?: string; error?: string }> = [];
   await Promise.all(channels.map(async (channel) => {
-    try { await syncChannel(channel.id, actorId); results.push({ id: channel.id, name: channel.name, ok: true }); }
+    try {
+      const synced = await syncChannel(channel.id, actorId);
+      results.push({ id: channel.id, name: channel.name, ok: true, videoPlaylistAvailable: synced.videoPlaylistAvailable, warning: synced.warning });
+    }
     catch (syncError) { results.push({ id: channel.id, name: channel.name, ok: false, error: syncError instanceof AppError ? syncError.message : "Không thể đồng bộ dữ liệu kênh." }); }
   }));
   return {

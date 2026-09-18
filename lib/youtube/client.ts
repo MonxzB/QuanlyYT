@@ -81,6 +81,9 @@ async function youtubeGet<T>(path: string, params: Record<string, string>): Prom
     if (reason === "quotaExceeded" || reason === "dailyLimitExceeded") {
       throw new AppError("YOUTUBE_QUOTA", "Đã hết hạn mức YouTube API hôm nay.", 429);
     }
+    if (reason === "playlistNotFound" || reason === "playlistItemsNotAccessible") {
+      throw new AppError("YOUTUBE_PLAYLIST_NOT_FOUND", "Playlist tải lên của kênh không khả dụng hoặc không có video công khai.", 404);
+    }
     throw new AppError("YOUTUBE_API", body.error?.message || "Không thể kết nối YouTube.", response.status || 502);
   }
   return body;

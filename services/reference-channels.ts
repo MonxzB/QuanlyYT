@@ -39,7 +39,14 @@ export async function syncReferenceChannel(id: string) {
   const { data: current, error: currentError } = await admin.from("reference_channels").select("*").eq("id", id).single();
   if (currentError || !current) throw new AppError("REFERENCE_NOT_FOUND", "Không tìm thấy kênh tham khảo.", 404);
   const youtube = await getYouTubeChannelById(current.youtube_channel_id);
-  const videos = await getPlaylistVideos(youtube.uploadsPlaylistId, 100);
+  let videos: Awaited<ReturnType<typeof getPlaylistVideos>> = [];
+  let playlistWarning: string | undefined;
+  try {
+    videos = await getPlaylistVideos(youtube.uploadsPlaylistId, 100);
+  } catch (videoError) {
+    if (!(videoError instanceof AppError) || videoError.code !== "YOUTUBE_PLAYLIST_NOT_FOUND") throw videoError;
+    playlistWarning = videoError.message;
+  }
   const now = new Date().toISOString();
   const { data, error } = await admin.from("reference_channels").update({
     name: youtube.title,
@@ -69,5 +76,5 @@ export async function syncReferenceChannel(id: string) {
     })), { onConflict: "youtube_video_id,channel_id,reference_channel_id" });
     if (videoError) throw videoError;
   }
-  return { reference: data as unknown as ReferenceChannel, syncedVideos: videos.length };
+  return { reference: data as unknown as ReferenceChannel, syncedVideos: videos.length, ...(playlistWarning ? { warning: playlistWarning } : {}) };
 }

@@ -139,9 +139,10 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
     const toastId = toast.loading("Đang đồng bộ dữ liệu YouTube…");
     try {
       const response = await fetch(`/api/channels/${id}/sync`, { method: "POST" });
-      const body = await response.json() as { data?: { syncedVideos: number }; error?: string };
+      const body = await response.json() as { data?: { syncedVideos: number; warning?: string }; error?: string };
       if (!response.ok || !body.data) throw new Error(body.error || "Đồng bộ thất bại.");
-      toast.success(`Đã đồng bộ ${body.data.syncedVideos} video.`, { id: toastId });
+      if (body.data.warning) toast.warning(`Đã cập nhật thông tin kênh. ${body.data.warning}`, { id: toastId });
+      else toast.success(`Đã đồng bộ ${body.data.syncedVideos} video.`, { id: toastId });
       await fetchPage(result.page);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Đồng bộ thất bại.", { id: toastId });
@@ -169,7 +170,7 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ before, limit: 3, excludedIds: Array.from(attemptedIds) }),
         });
-        const body = await response.json() as { data?: { processed: number; succeeded: number; failed: number; attemptedIds: string[]; hasMore: boolean; results: Array<{ id: string; name: string; ok: boolean; error?: string }> }; error?: string };
+        const body = await response.json() as { data?: { processed: number; succeeded: number; failed: number; attemptedIds: string[]; hasMore: boolean; results: Array<{ id: string; name: string; ok: boolean; videoPlaylistAvailable?: boolean; warning?: string; error?: string }> }; error?: string };
         if (!response.ok || !body.data) throw new Error(body.error || "Không thể đồng bộ tất cả kênh.");
         body.data.attemptedIds.forEach((id) => attemptedIds.add(id));
         processed += body.data.processed;
@@ -177,6 +178,11 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
         failed += body.data.failed;
         failures.push(...body.data.results.filter((item) => !item.ok).map((item) => ({ id: item.id, name: item.name, stage: "Đồng bộ dữ liệu" as const, error: item.error || "Không xác định được nguyên nhân." })));
         for (const item of body.data.results.filter((resultItem) => resultItem.ok)) {
+          if (item.videoPlaylistAvailable === false) {
+            viewScanFailed += 1;
+            failures.push({ id: item.id, name: item.name, stage: "Quét lượt xem", error: item.warning || "Playlist tải lên không khả dụng." });
+            continue;
+          }
           try {
             await runVideoViewScan(item.id, (progress) => {
               toast.loading(`Đã đồng bộ ${processed} kênh · đang quét view video ${progress.processedVideos.toLocaleString("vi-VN")}…`, { id: toastId });

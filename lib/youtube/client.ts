@@ -28,6 +28,7 @@ export interface YouTubeVideo {
   viewCount: number;
   likeCount: number;
   commentCount: number;
+  tags: string[];
 }
 
 type ApiResponse<T> = T & { error?: { code?: number; message?: string; errors?: Array<{ reason?: string }> } };
@@ -42,7 +43,7 @@ interface RawChannel {
 interface RawPlaylistItem { contentDetails?: { videoId?: string } }
 interface RawVideo {
   id: string;
-  snippet?: { title?: string; description?: string; publishedAt?: string; thumbnails?: ThumbnailSet };
+  snippet?: { title?: string; description?: string; publishedAt?: string; thumbnails?: ThumbnailSet; tags?: string[] };
   contentDetails?: { duration?: string };
   statistics?: { viewCount?: string; likeCount?: string; commentCount?: string };
 }
@@ -154,6 +155,7 @@ export async function getPlaylistVideos(playlistId: string, limit = 200): Promis
       viewCount: toNumber(item.statistics?.viewCount),
       likeCount: toNumber(item.statistics?.likeCount),
       commentCount: toNumber(item.statistics?.commentCount),
+      tags: item.snippet?.tags?.filter(Boolean).slice(0, 100) ?? [],
     })));
   }
   return videos.filter((video) => Boolean(video.publishedAt));

@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars, @next/next/no-img-element */
 
 import { useEffect, useState, type MouseEvent } from "react";
-import { AlertTriangle, Bell, BookOpenText, CirclePlay, FolderKanban, Globe2, LayoutDashboard, Lightbulb, LogOut, MessageSquareText, Settings, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Bell, BookOpenText, CirclePlay, FolderKanban, Globe2, KeyRound, LayoutDashboard, Lightbulb, LogOut, MessageSquareText, Settings, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast, Toaster } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,16 +12,19 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { t } from "@/lib/i18n";
 import type { Channel, DashboardData, Paginated, UserRole } from "@/types/domain";
 import type { WorkspaceData } from "@/services/workspace";
+import type { ChannelOption } from "@/services/channels";
 import { ChannelsLive } from "./channels-live";
 import { DashboardLive } from "./dashboard-live";
 import { ReferencesLive } from "./references-live";
 import { NichesLive } from "./niches-live";
 import { PromptsLive } from "./prompts-live";
+import { KeywordHunterLive } from "./keyword-hunter-live";
 import { compactNumber, relativeDate } from "./format";
 
 const nav = [
   { id: "dashboard", label: t("nav.dashboard"), icon: LayoutDashboard },
   { id: "channels", label: t("nav.channels"), icon: CirclePlay },
+  { id: "keyword-hunter", label: t("nav.keywordHunter"), icon: KeyRound },
   { id: "content", label: t("nav.content"), icon: FolderKanban },
   { id: "niches", label: t("nav.niches"), icon: Lightbulb },
   { id: "prompts", label: t("nav.prompts"), icon: MessageSquareText },
@@ -44,7 +47,7 @@ function pageHref(page: PageId): string {
   return page === "dashboard" ? "/" : `/?tab=${page}`;
 }
 
-export function AppShell({ dashboard, channels, workspace, user, initialPage }: { dashboard: DashboardData; channels: Paginated<Channel>; workspace: WorkspaceData; user: { name: string; role: UserRole }; initialPage?: string }) {
+export function AppShell({ dashboard, channels, channelOptions, workspace, user, initialPage }: { dashboard: DashboardData; channels: Paginated<Channel>; channelOptions: ChannelOption[]; workspace: WorkspaceData; user: { name: string; role: UserRole }; initialPage?: string }) {
   const router = useRouter();
   const [page, setPage] = useState<PageId>(() => validPage(initialPage));
   const canManage = user.role === "admin" || user.role === "manager";
@@ -62,6 +65,7 @@ export function AppShell({ dashboard, channels, workspace, user, initialPage }: 
   }, []);
   const content = page === "dashboard" ? <DashboardLive data={dashboard} onNavigate={(value) => setPage(value as PageId)} />
     : page === "channels" ? <ChannelsLive initial={channels} niches={workspace.niches} accounts={workspace.accounts} linkedAccountIds={workspace.linkedAccountIds} canManage={canManage} canDelete={user.role === "admin"} canRevealCredentials={user.role === "admin"} />
+    : page === "keyword-hunter" ? <KeywordHunterLive channels={channelOptions} />
     : page === "content" ? <ContentView data={workspace} />
     : page === "niches" ? <NichesLive initial={workspace.niches} canManage={canManage} canDelete={user.role === "admin"} />
     : page === "prompts" ? <PromptsLive initial={workspace.prompts} niches={workspace.niches} canManage={canManage} />

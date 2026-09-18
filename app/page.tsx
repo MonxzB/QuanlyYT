@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/channelos/app-shell";
 import { isConfigured } from "@/lib/env";
 import { getCurrentUser, getUserProfile } from "@/lib/supabase/auth";
-import { listChannels } from "@/services/channels";
+import { listChannelOptions, listChannels } from "@/services/channels";
 import { getDashboardData } from "@/services/dashboard";
 import { getWorkspaceData } from "@/services/workspace";
 
@@ -14,13 +14,14 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
   if (!user) redirect("/dang-nhap");
   const profile = await getUserProfile(user.id);
   if (!profile) redirect("/dang-nhap?error=profile");
-  const [dashboard, channels, workspace] = await Promise.all([
+  const [dashboard, channels, channelOptions, workspace] = await Promise.all([
     getDashboardData(),
     listChannels({ page: 1, pageSize: 50 }),
+    listChannelOptions(),
     getWorkspaceData(),
   ]);
   const { tab } = await searchParams;
-  return <AppShell dashboard={dashboard} channels={channels} workspace={workspace} initialPage={tab} user={{ name: profile.full_name || user.email || "Người dùng", role: profile.role }} />;
+  return <AppShell dashboard={dashboard} channels={channels} channelOptions={channelOptions} workspace={workspace} initialPage={tab} user={{ name: profile.full_name || user.email || "Người dùng", role: profile.role }} />;
 }
 
 function SetupRequired() {

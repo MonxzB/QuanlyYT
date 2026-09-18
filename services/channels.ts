@@ -216,6 +216,7 @@ export async function syncChannel(id: string, actorId: string): Promise<{ channe
       view_count: video.viewCount,
       like_count: video.likeCount,
       comment_count: video.commentCount,
+      tags: video.tags,
       last_synced_at: now,
     })), { onConflict: "youtube_video_id,channel_id,reference_channel_id" });
     if (error) throw error;
@@ -264,4 +265,13 @@ export async function syncAllChannels(actorId: string, input: { before: string; 
     hasMore: (data ?? []).length > limit,
     results,
   };
+}
+
+export type ChannelOption = Pick<Channel, "id" | "name" | "custom_url" | "youtube_url" | "avatar_url">;
+
+export async function listChannelOptions(): Promise<ChannelOption[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.from("channels").select("id,name,custom_url,youtube_url,avatar_url").order("name");
+  if (error) throw error;
+  return (data ?? []) as ChannelOption[];
 }

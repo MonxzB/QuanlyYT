@@ -30,6 +30,7 @@
    - `009_combined_channel_row_order.sql`
    - `010_channel_metric_changes.sql`
    - `011_video_source_identity.sql`
+   - `012_video_tags.sql`
 3. Tạo người dùng trong Supabase Auth.
 4. Cấp quyền `admin` cho người dùng đầu tiên trong SQL Editor:
 

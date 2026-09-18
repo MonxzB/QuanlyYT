@@ -8,7 +8,7 @@ import { getWorkspaceData } from "@/services/workspace";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   if (!isConfigured()) return <SetupRequired />;
   const user = await getCurrentUser();
   if (!user) redirect("/dang-nhap");
@@ -19,7 +19,8 @@ export default async function Home() {
     listChannels({ page: 1, pageSize: 50 }),
     getWorkspaceData(),
   ]);
-  return <AppShell dashboard={dashboard} channels={channels} workspace={workspace} user={{ name: profile.full_name || user.email || "Người dùng", role: profile.role }} />;
+  const { tab } = await searchParams;
+  return <AppShell dashboard={dashboard} channels={channels} workspace={workspace} initialPage={tab} user={{ name: profile.full_name || user.email || "Người dùng", role: profile.role }} />;
 }
 
 function SetupRequired() {

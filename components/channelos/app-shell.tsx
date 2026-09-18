@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-unused-vars, @next/next/no-img-element */
 
-import { useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import { AlertTriangle, Bell, BookOpenText, CirclePlay, FolderKanban, Globe2, LayoutDashboard, Lightbulb, LogOut, MessageSquareText, Settings, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast, Toaster } from "sonner";
@@ -34,11 +34,32 @@ const Youtube = CirclePlay;
 
 type PageId = typeof nav[number]["id"] | "settings";
 
-export function AppShell({ dashboard, channels, workspace, user }: { dashboard: DashboardData; channels: Paginated<Channel>; workspace: WorkspaceData; user: { name: string; role: UserRole } }) {
+const pageIds = new Set<PageId>([...nav.map((item) => item.id), "settings"]);
+
+function validPage(value?: string | null): PageId {
+  return value && pageIds.has(value as PageId) ? value as PageId : "dashboard";
+}
+
+function pageHref(page: PageId): string {
+  return page === "dashboard" ? "/" : `/?tab=${page}`;
+}
+
+export function AppShell({ dashboard, channels, workspace, user, initialPage }: { dashboard: DashboardData; channels: Paginated<Channel>; workspace: WorkspaceData; user: { name: string; role: UserRole }; initialPage?: string }) {
   const router = useRouter();
-  const [page, setPage] = useState<PageId>("dashboard");
+  const [page, setPage] = useState<PageId>(() => validPage(initialPage));
   const canManage = user.role === "admin" || user.role === "manager";
   const signOut = async () => { await createSupabaseBrowserClient().auth.signOut(); router.replace("/dang-nhap"); router.refresh(); };
+  const navigate = (event: MouseEvent<HTMLAnchorElement>, nextPage: PageId) => {
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    setPage(nextPage);
+    window.history.pushState(null, "", pageHref(nextPage));
+  };
+  useEffect(() => {
+    const syncPageFromUrl = () => setPage(validPage(new URLSearchParams(window.location.search).get("tab")));
+    window.addEventListener("popstate", syncPageFromUrl);
+    return () => window.removeEventListener("popstate", syncPageFromUrl);
+  }, []);
   const content = page === "dashboard" ? <DashboardLive data={dashboard} onNavigate={(value) => setPage(value as PageId)} />
     : page === "channels" ? <ChannelsLive initial={channels} niches={workspace.niches} accounts={workspace.accounts} linkedAccountIds={workspace.linkedAccountIds} canManage={canManage} canDelete={user.role === "admin"} canRevealCredentials={user.role === "admin"} />
     : page === "content" ? <ContentView data={workspace} />
@@ -51,7 +72,7 @@ export function AppShell({ dashboard, channels, workspace, user }: { dashboard: 
   return <SidebarProvider>
     <Sidebar collapsible="icon" className="border-r border-slate-200 bg-[#fbfcfe]">
       <SidebarHeader className="border-b border-slate-200 p-3"><div className="flex h-12 items-center gap-2.5 px-2"><span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-indigo-600 text-white"><CirclePlay className="size-[18px]" /></span><div className="group-data-[collapsible=icon]:hidden"><p className="text-[15px] font-semibold">ChannelOS</p><p className="text-xs text-slate-500">Quản lý mạng lưới</p></div></div></SidebarHeader>
-      <SidebarContent className="px-2 py-3"><SidebarGroup className="p-0"><SidebarGroupContent><SidebarMenu className="gap-1">{nav.map((item) => <SidebarMenuItem key={item.id}><SidebarMenuButton onClick={() => setPage(item.id)} tooltip={item.label} isActive={page === item.id} className="h-10 rounded-[10px] px-3 text-[14px] font-medium text-slate-600 data-[active=true]:bg-indigo-50 data-[active=true]:text-indigo-700"><item.icon className="size-[18px]" /><span>{item.label}</span>{item.id === "alerts" && workspace.alerts.filter((alert) => !alert.is_resolved).length > 0 && <span className="ml-auto rounded-full bg-red-50 px-2 text-xs font-semibold text-red-600">{workspace.alerts.filter((alert) => !alert.is_resolved).length}</span>}</SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent>
+      <SidebarContent className="px-2 py-3"><SidebarGroup className="p-0"><SidebarGroupContent><SidebarMenu className="gap-1">{nav.map((item) => <SidebarMenuItem key={item.id}><SidebarMenuButton asChild tooltip={item.label} isActive={page === item.id} className="h-10 rounded-[10px] px-3 text-[14px] font-medium text-slate-600 data-[active=true]:bg-indigo-50 data-[active=true]:text-indigo-700"><a href={pageHref(item.id)} onClick={(event) => navigate(event, item.id)}><item.icon className="size-[18px]" /><span>{item.label}</span>{item.id === "alerts" && workspace.alerts.filter((alert) => !alert.is_resolved).length > 0 && <span className="ml-auto rounded-full bg-red-50 px-2 text-xs font-semibold text-red-600">{workspace.alerts.filter((alert) => !alert.is_resolved).length}</span>}</a></SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent>
       <SidebarRail />
     </Sidebar>
     <SidebarInset className="min-w-0 bg-white">
@@ -59,7 +80,7 @@ export function AppShell({ dashboard, channels, workspace, user }: { dashboard: 
         <SidebarTrigger className="size-9 rounded-lg border border-slate-200" />
         <div className="min-w-0 flex-1"><h1 className="truncate text-lg font-semibold text-slate-950">{pageTitle(page)}</h1></div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <Button type="button" variant={page === "settings" ? "secondary" : "ghost"} size="sm" onClick={() => setPage("settings")} title="Cài đặt" className="gap-2"><Settings className="size-4" /><span className="hidden md:inline">Cài đặt</span></Button>
+          <Button asChild variant={page === "settings" ? "secondary" : "ghost"} size="sm" title="Cài đặt" className="gap-2"><a href={pageHref("settings")} onClick={(event) => navigate(event, "settings")}><Settings className="size-4" /><span className="hidden md:inline">Cài đặt</span></a></Button>
           <span className="mx-1 hidden h-8 w-px bg-slate-200 sm:block" />
           <span className="grid size-8 shrink-0 place-items-center rounded-full bg-slate-900 text-xs font-bold text-white">{user.name.slice(0, 1).toUpperCase()}</span>
           <span className="hidden min-w-0 max-w-40 text-left sm:grid"><span className="truncate text-sm font-semibold text-slate-900">{user.name}</span><span className="text-xs text-slate-500">{roleLabel(user.role)}</span></span>

@@ -41,6 +41,7 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const [syncingAll, setSyncingAll] = useState(false);
+  const [scanningViewsId, setScanningViewsId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addAccountOpen, setAddAccountOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -164,6 +165,41 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
     }
   };
 
+  const scanVideoViews = async (channel: Channel) => {
+    if (scanningViewsId) return;
+    setScanningViewsId(channel.id);
+    const toastId = toast.loading(`Đang quét toàn bộ video của ${channel.name}…`);
+    try {
+      let action: "start" | "continue" = "start";
+      let done = false;
+      let batchCount = 0;
+      let processedVideos = 0;
+      let totalViews = 0;
+      while (!done && batchCount < 500) {
+        const response = await fetch(`/api/channels/${channel.id}/video-views/scan`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action }),
+        });
+        const body = await response.json() as { data?: { done: boolean; processedVideos: number; totalViews: number }; error?: string };
+        if (!response.ok || !body.data) throw new Error(body.error || "Không thể quét lượt xem video.");
+        done = body.data.done;
+        processedVideos = body.data.processedVideos;
+        totalViews = body.data.totalViews;
+        action = "continue";
+        batchCount += 1;
+        toast.loading(`Đã quét ${processedVideos.toLocaleString("vi-VN")} video · ${compactNumber(totalViews)} lượt xem`, { id: toastId });
+      }
+      if (!done) throw new Error("Đã dừng sau 25.000 video để tránh vòng lặp ngoài ý muốn.");
+      toast.success(`Hoàn tất: ${processedVideos.toLocaleString("vi-VN")} video · ${totalViews.toLocaleString("vi-VN")} lượt xem.`, { id: toastId });
+      await fetchPage(result.page);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không thể quét lượt xem video.", { id: toastId });
+    } finally {
+      setScanningViewsId(null);
+    }
+  };
+
   const remove = async (channel: Channel) => {
     if (!window.confirm(`Xóa kênh “${channel.name}” và toàn bộ video, metrics, cảnh báo liên quan?`)) return;
     const toastId = toast.loading("Đang xóa kênh…");
@@ -234,7 +270,7 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
         </TableRow></TableHeader>
         <TableBody>
           {displayRows.map((row) => row.kind === "channel"
-            ? <ChannelDataRow key={row.channel.id} channel={row.channel} canManage={canManage} canDelete={canDelete} canRevealCredentials={canRevealCredentials} canDrag={canReorder} dragging={draggingRowKey === `channel:${row.channel.id}`} onDragStart={() => setDraggingRowKey(`channel:${row.channel.id}`)} onDragEnd={() => setDraggingRowKey(null)} onDrop={() => void moveRow(`channel:${row.channel.id}`)} onAccountSaved={() => fetchPage(result.page)} onStatusSaved={() => fetchPage(result.page)} onEdit={() => setEditing(row.channel)} onSync={() => void sync(row.channel.id)} onRemove={() => void remove(row.channel)} />
+            ? <ChannelDataRow key={row.channel.id} channel={row.channel} canManage={canManage} canDelete={canDelete} canRevealCredentials={canRevealCredentials} canDrag={canReorder} scanningViews={scanningViewsId === row.channel.id} dragging={draggingRowKey === `channel:${row.channel.id}`} onDragStart={() => setDraggingRowKey(`channel:${row.channel.id}`)} onDragEnd={() => setDraggingRowKey(null)} onDrop={() => void moveRow(`channel:${row.channel.id}`)} onAccountSaved={() => fetchPage(result.page)} onStatusSaved={() => fetchPage(result.page)} onEdit={() => setEditing(row.channel)} onSync={() => void sync(row.channel.id)} onScanViews={() => void scanVideoViews(row.channel)} onRemove={() => void remove(row.channel)} />
             : <UnlinkedAccountRow key={`account-${row.account.id}`} account={row.account} canManage={canManage} canRevealCredentials={canRevealCredentials} canDrag={canReorder} dragging={draggingRowKey === `account:${row.account.id}`} onDragStart={() => setDraggingRowKey(`account:${row.account.id}`)} onDragEnd={() => setDraggingRowKey(null)} onDrop={() => void moveRow(`account:${row.account.id}`)} onAccountSaved={async () => { router.refresh(); }} onAddChannel={(accountId) => { setPendingAccountId(accountId); setAddOpen(true); }} />)}
           {!displayRows.length && <TableRow><TableCell colSpan={14} className="h-40 text-center text-slate-400">{loading ? "Đang tải…" : "Chưa có kênh phù hợp."}</TableCell></TableRow>}
         </TableBody>
@@ -248,7 +284,7 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
   </div>;
 }
 
-function ChannelDataRow({ channel, canManage, canDelete, canRevealCredentials, canDrag, dragging, onDragStart, onDragEnd, onDrop, onAccountSaved, onStatusSaved, onEdit, onSync, onRemove }: { channel: Channel; canManage: boolean; canDelete: boolean; canRevealCredentials: boolean; canDrag: boolean; dragging: boolean; onDragStart: () => void; onDragEnd: () => void; onDrop: () => void; onAccountSaved: () => Promise<void>; onStatusSaved: () => Promise<void>; onEdit: () => void; onSync: () => void; onRemove: () => void }) {
+function ChannelDataRow({ channel, canManage, canDelete, canRevealCredentials, canDrag, scanningViews, dragging, onDragStart, onDragEnd, onDrop, onAccountSaved, onStatusSaved, onEdit, onSync, onScanViews, onRemove }: { channel: Channel; canManage: boolean; canDelete: boolean; canRevealCredentials: boolean; canDrag: boolean; scanningViews: boolean; dragging: boolean; onDragStart: () => void; onDragEnd: () => void; onDrop: () => void; onAccountSaved: () => Promise<void>; onStatusSaved: () => Promise<void>; onEdit: () => void; onSync: () => void; onScanViews: () => void; onRemove: () => void }) {
   return <TableRow onDragOver={(event) => { if (canDrag) event.preventDefault(); }} onDrop={() => { if (canDrag) onDrop(); }} className={dragging ? "opacity-50" : undefined}>
     <TableCell><span draggable={canDrag} onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", channel.id); onDragStart(); }} onDragEnd={onDragEnd} title={canDrag ? "Kéo để đổi vị trí" : canManage ? "Bỏ tìm kiếm, bộ lọc hoặc sắp xếp cột để kéo thả" : undefined} className={canDrag ? "inline-flex cursor-grab rounded p-1 text-slate-400 hover:bg-slate-100 active:cursor-grabbing" : "text-slate-300"}><GripVertical className="size-4" /></span></TableCell>
     <TableCell className="overflow-hidden"><a href={channel.youtube_url} target="_blank" rel="noreferrer" title={`Mở ${channel.name} trên YouTube`} className="group flex min-w-0 items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">{channel.avatar_url ? <img src={channel.avatar_url} alt="" className="size-8 shrink-0 rounded-lg object-cover" /> : <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-red-50 text-red-600"><Youtube className="size-4" /></span>}<div className="min-w-0"><p className="truncate font-semibold text-slate-900 group-hover:text-indigo-600 group-hover:underline">{channel.name}</p><p className="truncate text-xs text-slate-400" title={channel.custom_url ?? channel.youtube_channel_id}>{channel.custom_url ?? channel.youtube_channel_id}</p></div></a></TableCell>
@@ -260,7 +296,7 @@ function ChannelDataRow({ channel, canManage, canDelete, canRevealCredentials, c
     <TableCell><InlineStatusSelect channel={channel} canEdit={canManage} onSaved={onStatusSaved} /></TableCell>
     <TableCell className="overflow-hidden"><span className="block truncate" title={channel.niche?.name ?? "Chưa phân loại"}>{channel.niche?.name ?? "Chưa phân loại"}</span></TableCell>
     <TableCell className="font-medium"><MetricTrend value={channel.subscriber_count} change={channel.subscriber_change ?? 0} /></TableCell>
-    <TableCell><MetricTrend value={channel.view_count} change={channel.view_change ?? 0} /></TableCell>
+    <TableCell><div className="flex items-center justify-between gap-1"><MetricTrend value={channelViewCount(channel)} change={channel.public_video_view_count == null ? channel.view_change ?? 0 : 0} />{canManage && <Button type="button" variant="ghost" size="icon-sm" onClick={onScanViews} disabled={scanningViews} title={channel.public_video_view_scanned_at ? `Quét lại toàn bộ video · lần cuối ${relativeDate(channel.public_video_view_scanned_at)}` : "Quét toàn bộ video và cộng tổng lượt xem"} className="size-6 shrink-0 text-indigo-600">{scanningViews ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}</Button>}</div></TableCell>
     <TableCell><MetricTrend value={channel.video_count} change={channel.video_change ?? 0} format={(value) => value.toLocaleString("vi-VN")} /></TableCell>
     <TableCell>{relativeDate(channel.last_video_at)}</TableCell>
     <TableCell><div className="flex justify-end gap-0">{canManage && <><Button onClick={onEdit} variant="ghost" size="icon-sm" title="Chỉnh sửa" className="size-5"><Pencil className="size-3" /></Button><Button onClick={onSync} variant="ghost" size="icon-sm" title="Đồng bộ" className="size-5"><RefreshCw className="size-3" /></Button></>}{canDelete && <Button onClick={onRemove} variant="ghost" size="icon-sm" title="Xóa kênh" className="size-5 text-red-600 hover:text-red-700"><Trash2 className="size-3" /></Button>}<Button asChild variant="ghost" size="icon-sm" className="size-5"><a href={channel.youtube_url} target="_blank" rel="noreferrer" title="Mở trên YouTube"><ExternalLink className="size-3" /></a></Button></div></TableCell>
@@ -310,10 +346,14 @@ function channelSortValue(channel: Channel, key: SortKey): string | number | nul
   if (key === "status") return statusLabels[channel.status];
   if (key === "niche") return channel.niche?.name ?? null;
   if (key === "subscribers") return channel.subscriber_count;
-  if (key === "views") return channel.view_count;
+  if (key === "views") return channelViewCount(channel);
   if (key === "videos") return channel.video_count;
   if (key === "lastVideo") return channel.last_video_at ? Date.parse(channel.last_video_at) : null;
   return null;
+}
+
+function channelViewCount(channel: Channel): number {
+  return channel.public_video_view_count ?? channel.view_count;
 }
 
 function accountSortValue(account: Account, key: SortKey): string | number | null {

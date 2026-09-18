@@ -9,6 +9,7 @@
 - Thêm kênh từ URL `youtube.com/@handle` hoặc `youtube.com/channel/UC…`.
 - Sửa trạng thái, chủ đề, ghi chú; xóa và đồng bộ từng kênh.
 - Đồng bộ hàng loạt theo batch nhỏ, có timeout và tiếp tục tự động đến khi xử lý hết các kênh đang hoạt động.
+- Quét toàn bộ video công khai theo batch 50 video để tính tổng lượt xem cập nhật hơn số tổng cấp kênh.
 - Nhập file Excel quản lý kênh; lưu mật khẩu và secret 2FA bằng AES-GCM trong bảng riêng.
 - Lưu video công khai, snapshot metrics và cảnh báo.
 - Quản lý chủ đề và theo dõi kênh tham khảo.
@@ -31,6 +32,7 @@
    - `010_channel_metric_changes.sql`
    - `011_video_source_identity.sql`
    - `012_video_tags.sql`
+   - `013_channel_video_view_scan.sql`
 3. Tạo người dùng trong Supabase Auth.
 4. Cấp quyền `admin` cho người dùng đầu tiên trong SQL Editor:
 

@@ -48,6 +48,21 @@ interface RawVideo {
   statistics?: { viewCount?: string; likeCount?: string; commentCount?: string };
 }
 
+function parseVideo(item: RawVideo): YouTubeVideo {
+  return {
+    id: item.id,
+    title: item.snippet?.title ?? "Video",
+    description: item.snippet?.description ?? "",
+    thumbnailUrl: item.snippet?.thumbnails?.high?.url ?? item.snippet?.thumbnails?.medium?.url ?? null,
+    publishedAt: item.snippet?.publishedAt ?? "",
+    duration: item.contentDetails?.duration ?? null,
+    viewCount: toNumber(item.statistics?.viewCount),
+    likeCount: toNumber(item.statistics?.likeCount),
+    commentCount: toNumber(item.statistics?.commentCount),
+    tags: item.snippet?.tags?.filter(Boolean).slice(0, 100) ?? [],
+  };
+}
+
 async function youtubeGet<T>(path: string, params: Record<string, string>): Promise<T> {
   const { YOUTUBE_API_KEY } = getServerEnv();
   const query = new URLSearchParams({ ...params, key: YOUTUBE_API_KEY });
@@ -124,39 +139,41 @@ export async function getYouTubeChannelById(channelId: string): Promise<YouTubeC
   return parseChannel(result.items[0]);
 }
 
+export async function getPlaylistVideoPage(playlistId: string, pageToken = ""): Promise<{ videoIds: string[]; nextPageToken: string | null }> {
+  const page = await youtubeGet<{ items?: RawPlaylistItem[]; nextPageToken?: string }>("playlistItems", {
+    part: "contentDetails",
+    playlistId,
+    maxResults: "50",
+    ...(pageToken ? { pageToken } : {}),
+  });
+  return {
+    videoIds: (page.items ?? []).map((item) => item.contentDetails?.videoId).filter((id): id is string => Boolean(id)),
+    nextPageToken: page.nextPageToken ?? null,
+  };
+}
+
+export async function getVideosByIds(videoIds: string[]): Promise<YouTubeVideo[]> {
+  if (!videoIds.length) return [];
+  const result = await youtubeGet<{ items?: RawVideo[] }>("videos", {
+    part: "snippet,contentDetails,statistics",
+    id: videoIds.slice(0, 50).join(","),
+    maxResults: "50",
+  });
+  return (result.items ?? []).map(parseVideo).filter((video) => Boolean(video.publishedAt));
+}
+
 export async function getPlaylistVideos(playlistId: string, limit = 200): Promise<YouTubeVideo[]> {
   const ids: string[] = [];
   let pageToken = "";
   while (ids.length < limit) {
-    const page = await youtubeGet<{ items?: RawPlaylistItem[]; nextPageToken?: string }>("playlistItems", {
-      part: "contentDetails",
-      playlistId,
-      maxResults: String(Math.min(50, limit - ids.length)),
-      ...(pageToken ? { pageToken } : {}),
-    });
-    ids.push(...(page.items ?? []).map((item) => item.contentDetails?.videoId).filter((id): id is string => Boolean(id)));
+    const page = await getPlaylistVideoPage(playlistId, pageToken);
+    ids.push(...page.videoIds.slice(0, limit - ids.length));
     if (!page.nextPageToken) break;
     pageToken = page.nextPageToken;
   }
   const videos: YouTubeVideo[] = [];
   for (let index = 0; index < ids.length; index += 50) {
-    const batch = await youtubeGet<{ items?: RawVideo[] }>("videos", {
-      part: "snippet,contentDetails,statistics",
-      id: ids.slice(index, index + 50).join(","),
-      maxResults: "50",
-    });
-    videos.push(...(batch.items ?? []).map((item) => ({
-      id: item.id,
-      title: item.snippet?.title ?? "Video",
-      description: item.snippet?.description ?? "",
-      thumbnailUrl: item.snippet?.thumbnails?.high?.url ?? item.snippet?.thumbnails?.medium?.url ?? null,
-      publishedAt: item.snippet?.publishedAt ?? "",
-      duration: item.contentDetails?.duration ?? null,
-      viewCount: toNumber(item.statistics?.viewCount),
-      likeCount: toNumber(item.statistics?.likeCount),
-      commentCount: toNumber(item.statistics?.commentCount),
-      tags: item.snippet?.tags?.filter(Boolean).slice(0, 100) ?? [],
-    })));
+    videos.push(...await getVideosByIds(ids.slice(index, index + 50)));
   }
-  return videos.filter((video) => Boolean(video.publishedAt));
+  return videos;
 }

@@ -29,6 +29,9 @@ export interface Channel {
   country: string | null;
   subscriber_count: number;
   view_count: number;
+  public_video_view_count: number | null;
+  public_video_view_scanned_at: string | null;
+  video_view_scan_status: "idle" | "running" | "complete";
   video_count: number;
   subscriber_change?: number;
   view_change?: number;

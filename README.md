@@ -8,7 +8,7 @@
 - Phân quyền `admin`, `manager`, `viewer`.
 - Thêm kênh từ URL `youtube.com/@handle` hoặc `youtube.com/channel/UC…`.
 - Sửa trạng thái, chủ đề, ghi chú; xóa và đồng bộ từng kênh.
-- Đồng bộ hàng loạt tối đa 25 kênh đang hoạt động mỗi lần.
+- Đồng bộ hàng loạt theo batch nhỏ, có timeout và tiếp tục tự động đến khi xử lý hết các kênh đang hoạt động.
 - Nhập file Excel quản lý kênh; lưu mật khẩu và secret 2FA bằng AES-GCM trong bảng riêng.
 - Lưu video công khai, snapshot metrics và cảnh báo.
 - Quản lý chủ đề và theo dõi kênh tham khảo.
@@ -29,6 +29,7 @@
    - `008_niche_ordering.sql`
    - `009_combined_channel_row_order.sql`
    - `010_channel_metric_changes.sql`
+   - `011_video_source_identity.sql`
 3. Tạo người dùng trong Supabase Auth.
 4. Cấp quyền `admin` cho người dùng đầu tiên trong SQL Editor:
 
@@ -48,10 +49,11 @@ Sao chép `.env.example` thành `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable-key>
 SUPABASE_SECRET_KEY=<secret-key>
+ACCOUNT_SECRETS_ENCRYPTION_KEY=<chuỗi-ngẫu-nhiên-tối-thiểu-32-ký-tự>
 YOUTUBE_API_KEY=<youtube-data-api-key>
 ```
 
-`SUPABASE_SECRET_KEY` và `YOUTUBE_API_KEY` chỉ được dùng ở server. Không thêm tiền tố `NEXT_PUBLIC_`.
+`SUPABASE_SECRET_KEY`, `ACCOUNT_SECRETS_ENCRYPTION_KEY` và `YOUTUBE_API_KEY` chỉ được dùng ở server. Không thêm tiền tố `NEXT_PUBLIC_`. `ACCOUNT_SECRETS_ENCRYPTION_KEY` phải là chuỗi ngẫu nhiên ổn định, tối thiểu 32 ký tự. Secret định dạng cũ được đọc bằng khóa cũ và tự mã hóa lại bằng khóa riêng khi admin xem lần đầu. Không thay đổi hoặc xóa các khóa này nếu chưa chạy quy trình rotate dữ liệu.
 
 Trong Google Cloud, bật **YouTube Data API v3**, tạo API key và giới hạn key chỉ được gọi API này.
 
@@ -65,7 +67,7 @@ npm run dev
 Kiểm tra trước khi deploy:
 
 ```bash
-npx tsc --noEmit
+npm run typecheck
 npm run lint
 npm run build
 ```

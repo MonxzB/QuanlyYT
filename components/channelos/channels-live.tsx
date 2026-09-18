@@ -26,13 +26,14 @@ type ChannelsLiveProps = {
   linkedAccountIds: string[];
   canManage: boolean;
   canDelete: boolean;
+  canRevealCredentials: boolean;
 };
 
 type SortKey = "channel" | "email" | "recoveryEmail" | "phone" | "status" | "niche" | "subscribers" | "views" | "videos" | "lastVideo" | "health";
 type SortDirection = "asc" | "desc";
 type ChannelBoardRow = { kind: "channel"; channel: Channel } | { kind: "account"; account: Account };
 
-export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canManage, canDelete }: ChannelsLiveProps) {
+export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canManage, canDelete, canRevealCredentials }: ChannelsLiveProps) {
   const router = useRouter();
   const [result, setResult] = useState(initial);
   const [accountSortOrders, setAccountSortOrders] = useState<Record<string, number>>({});
@@ -126,13 +127,34 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
     setSyncingAll(true);
     const toastId = toast.loading("Đang đồng bộ các kênh hoạt động…");
     try {
-      const response = await fetch("/api/channels/sync-all", { method: "POST" });
-      const body = await response.json() as { data?: { processed: number; succeeded: number; failed: number }; error?: string };
-      if (!response.ok || !body.data) throw new Error(body.error || "Không thể đồng bộ tất cả kênh.");
-      const message = body.data.failed
-        ? `Đồng bộ xong ${body.data.succeeded}/${body.data.processed} kênh; ${body.data.failed} kênh lỗi.`
-        : `Đã đồng bộ ${body.data.succeeded} kênh.`;
-      if (body.data.failed) toast.warning(message, { id: toastId });
+      const before = new Date().toISOString();
+      const attemptedIds = new Set<string>();
+      let processed = 0;
+      let succeeded = 0;
+      let failed = 0;
+      let hasMore = true;
+      let batchCount = 0;
+      while (hasMore && batchCount < 200) {
+        const response = await fetch("/api/channels/sync-all", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ before, limit: 3, excludedIds: Array.from(attemptedIds) }),
+        });
+        const body = await response.json() as { data?: { processed: number; succeeded: number; failed: number; attemptedIds: string[]; hasMore: boolean }; error?: string };
+        if (!response.ok || !body.data) throw new Error(body.error || "Không thể đồng bộ tất cả kênh.");
+        body.data.attemptedIds.forEach((id) => attemptedIds.add(id));
+        processed += body.data.processed;
+        succeeded += body.data.succeeded;
+        failed += body.data.failed;
+        hasMore = body.data.hasMore && body.data.processed > 0;
+        batchCount += 1;
+        toast.loading(`Đang đồng bộ… ${processed} kênh đã xử lý.`, { id: toastId });
+      }
+      if (batchCount >= 200 && hasMore) throw new Error("Đã dừng sau 200 batch để tránh vòng lặp đồng bộ ngoài ý muốn.");
+      const message = failed
+        ? `Đồng bộ xong ${succeeded}/${processed} kênh; ${failed} kênh lỗi.`
+        : `Đã đồng bộ ${succeeded} kênh.`;
+      if (failed) toast.warning(message, { id: toastId });
       else toast.success(message, { id: toastId });
       await fetchPage(result.page);
     } catch (error) {
@@ -213,8 +235,8 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
         </TableRow></TableHeader>
         <TableBody>
           {displayRows.map((row) => row.kind === "channel"
-            ? <ChannelDataRow key={row.channel.id} channel={row.channel} canManage={canManage} canDelete={canDelete} canDrag={canReorder} dragging={draggingRowKey === `channel:${row.channel.id}`} onDragStart={() => setDraggingRowKey(`channel:${row.channel.id}`)} onDragEnd={() => setDraggingRowKey(null)} onDrop={() => void moveRow(`channel:${row.channel.id}`)} onAccountSaved={() => fetchPage(result.page)} onStatusSaved={() => fetchPage(result.page)} onEdit={() => setEditing(row.channel)} onSync={() => void sync(row.channel.id)} onRemove={() => void remove(row.channel)} />
-            : <UnlinkedAccountRow key={`account-${row.account.id}`} account={row.account} canManage={canManage} canDrag={canReorder} dragging={draggingRowKey === `account:${row.account.id}`} onDragStart={() => setDraggingRowKey(`account:${row.account.id}`)} onDragEnd={() => setDraggingRowKey(null)} onDrop={() => void moveRow(`account:${row.account.id}`)} onAccountSaved={async () => { router.refresh(); }} onAddChannel={(accountId) => { setPendingAccountId(accountId); setAddOpen(true); }} />)}
+            ? <ChannelDataRow key={row.channel.id} channel={row.channel} canManage={canManage} canDelete={canDelete} canRevealCredentials={canRevealCredentials} canDrag={canReorder} dragging={draggingRowKey === `channel:${row.channel.id}`} onDragStart={() => setDraggingRowKey(`channel:${row.channel.id}`)} onDragEnd={() => setDraggingRowKey(null)} onDrop={() => void moveRow(`channel:${row.channel.id}`)} onAccountSaved={() => fetchPage(result.page)} onStatusSaved={() => fetchPage(result.page)} onEdit={() => setEditing(row.channel)} onSync={() => void sync(row.channel.id)} onRemove={() => void remove(row.channel)} />
+            : <UnlinkedAccountRow key={`account-${row.account.id}`} account={row.account} canManage={canManage} canRevealCredentials={canRevealCredentials} canDrag={canReorder} dragging={draggingRowKey === `account:${row.account.id}`} onDragStart={() => setDraggingRowKey(`account:${row.account.id}`)} onDragEnd={() => setDraggingRowKey(null)} onDrop={() => void moveRow(`account:${row.account.id}`)} onAccountSaved={async () => { router.refresh(); }} onAddChannel={(accountId) => { setPendingAccountId(accountId); setAddOpen(true); }} />)}
           {!displayRows.length && <TableRow><TableCell colSpan={15} className="h-40 text-center text-slate-400">{loading ? "Đang tải…" : "Chưa có kênh phù hợp."}</TableCell></TableRow>}
         </TableBody>
       </Table>
@@ -227,14 +249,14 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
   </div>;
 }
 
-function ChannelDataRow({ channel, canManage, canDelete, canDrag, dragging, onDragStart, onDragEnd, onDrop, onAccountSaved, onStatusSaved, onEdit, onSync, onRemove }: { channel: Channel; canManage: boolean; canDelete: boolean; canDrag: boolean; dragging: boolean; onDragStart: () => void; onDragEnd: () => void; onDrop: () => void; onAccountSaved: () => Promise<void>; onStatusSaved: () => Promise<void>; onEdit: () => void; onSync: () => void; onRemove: () => void }) {
+function ChannelDataRow({ channel, canManage, canDelete, canRevealCredentials, canDrag, dragging, onDragStart, onDragEnd, onDrop, onAccountSaved, onStatusSaved, onEdit, onSync, onRemove }: { channel: Channel; canManage: boolean; canDelete: boolean; canRevealCredentials: boolean; canDrag: boolean; dragging: boolean; onDragStart: () => void; onDragEnd: () => void; onDrop: () => void; onAccountSaved: () => Promise<void>; onStatusSaved: () => Promise<void>; onEdit: () => void; onSync: () => void; onRemove: () => void }) {
   return <TableRow onDragOver={(event) => { if (canDrag) event.preventDefault(); }} onDrop={() => { if (canDrag) onDrop(); }} className={dragging ? "opacity-50" : undefined}>
     <TableCell><span draggable={canDrag} onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", channel.id); onDragStart(); }} onDragEnd={onDragEnd} title={canDrag ? "Kéo để đổi vị trí" : canManage ? "Bỏ tìm kiếm, bộ lọc hoặc sắp xếp cột để kéo thả" : undefined} className={canDrag ? "inline-flex cursor-grab rounded p-1 text-slate-400 hover:bg-slate-100 active:cursor-grabbing" : "text-slate-300"}><GripVertical className="size-4" /></span></TableCell>
     <TableCell className="overflow-hidden"><div className="flex min-w-0 items-center gap-2">{channel.avatar_url ? <img src={channel.avatar_url} alt="" className="size-8 shrink-0 rounded-lg object-cover" /> : <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-red-50 text-red-600"><Youtube className="size-4" /></span>}<div className="min-w-0"><p className="truncate font-semibold text-slate-900" title={channel.name}>{channel.name}</p><p className="truncate text-xs text-slate-400" title={channel.custom_url ?? channel.youtube_channel_id}>{channel.custom_url ?? channel.youtube_channel_id}</p></div></div></TableCell>
     <TableCell><EditableAccountCell accountId={channel.account?.id} field="email" value={channel.account?.email ?? null} canEdit={canManage} onSaved={onAccountSaved} /></TableCell>
-    <TableCell><SecretCell accountId={channel.account?.id} kind="password" hasSecret={Boolean(channel.account?.has_password)} canReveal={canManage} onSaved={onAccountSaved} /></TableCell>
+    <TableCell><SecretCell accountId={channel.account?.id} kind="password" hasSecret={Boolean(channel.account?.has_password)} canReveal={canRevealCredentials} onSaved={onAccountSaved} /></TableCell>
     <TableCell><EditableAccountCell accountId={channel.account?.id} field="recoveryEmail" value={channel.account?.recovery_email ?? null} canEdit={canManage} onSaved={onAccountSaved} /></TableCell>
-    <TableCell><SecretCell accountId={channel.account?.id} kind="twoFactorSecret" hasSecret={Boolean(channel.account?.two_factor_enabled)} canReveal={canManage} onSaved={onAccountSaved} /></TableCell>
+    <TableCell><SecretCell accountId={channel.account?.id} kind="twoFactorSecret" hasSecret={Boolean(channel.account?.two_factor_enabled)} canReveal={canRevealCredentials} onSaved={onAccountSaved} /></TableCell>
     <TableCell><EditableAccountCell accountId={channel.account?.id} field="phone" value={channel.account?.phone ?? null} canEdit={canManage} onSaved={onAccountSaved} /></TableCell>
     <TableCell><InlineStatusSelect channel={channel} canEdit={canManage} onSaved={onStatusSaved} /></TableCell>
     <TableCell className="overflow-hidden"><span className="block truncate" title={channel.niche?.name ?? "Chưa phân loại"}>{channel.niche?.name ?? "Chưa phân loại"}</span></TableCell>
@@ -304,14 +326,14 @@ function accountSortValue(account: Account, key: SortKey): string | number | nul
   return null;
 }
 
-function UnlinkedAccountRow({ account, canManage, canDrag, dragging, onDragStart, onDragEnd, onDrop, onAccountSaved, onAddChannel }: { account: Account; canManage: boolean; canDrag: boolean; dragging: boolean; onDragStart: () => void; onDragEnd: () => void; onDrop: () => void; onAccountSaved: () => Promise<void>; onAddChannel: (accountId: string) => void }) {
+function UnlinkedAccountRow({ account, canManage, canRevealCredentials, canDrag, dragging, onDragStart, onDragEnd, onDrop, onAccountSaved, onAddChannel }: { account: Account; canManage: boolean; canRevealCredentials: boolean; canDrag: boolean; dragging: boolean; onDragStart: () => void; onDragEnd: () => void; onDrop: () => void; onAccountSaved: () => Promise<void>; onAddChannel: (accountId: string) => void }) {
   return <TableRow onDragOver={(event) => { if (canDrag) event.preventDefault(); }} onDrop={() => { if (canDrag) onDrop(); }} className={`bg-amber-50/30 ${dragging ? "opacity-50" : ""}`}>
     <TableCell><span draggable={canDrag} onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", account.id); onDragStart(); }} onDragEnd={onDragEnd} title={canDrag ? "Kéo để đổi vị trí tài khoản chưa có kênh" : canManage ? "Bỏ tìm kiếm hoặc sắp xếp cột để kéo thả" : undefined} className={canDrag ? "inline-flex cursor-grab rounded p-1 text-slate-400 hover:bg-amber-100 active:cursor-grabbing" : "inline-flex rounded p-1 text-slate-300"}><GripVertical className="size-4" /></span></TableCell>
     <TableCell className="overflow-hidden"><div className="flex min-w-0 items-center gap-2"><span className="grid size-8 shrink-0 place-items-center rounded-lg bg-amber-100 text-amber-700"><Youtube className="size-4" /></span><div className="min-w-0"><p className="truncate font-semibold text-slate-700">Chưa có kênh</p><p className="truncate text-xs text-slate-500">Tài khoản đã nhập từ Excel</p></div></div></TableCell>
     <TableCell><EditableAccountCell accountId={account.id} field="email" value={account.email} canEdit={canManage} onSaved={onAccountSaved} /></TableCell>
-    <TableCell><SecretCell accountId={account.id} kind="password" hasSecret={account.has_password} canReveal={canManage} onSaved={onAccountSaved} /></TableCell>
+    <TableCell><SecretCell accountId={account.id} kind="password" hasSecret={account.has_password} canReveal={canRevealCredentials} onSaved={onAccountSaved} /></TableCell>
     <TableCell><EditableAccountCell accountId={account.id} field="recoveryEmail" value={account.recovery_email} canEdit={canManage} onSaved={onAccountSaved} /></TableCell>
-    <TableCell><SecretCell accountId={account.id} kind="twoFactorSecret" hasSecret={account.two_factor_enabled} canReveal={canManage} onSaved={onAccountSaved} /></TableCell>
+    <TableCell><SecretCell accountId={account.id} kind="twoFactorSecret" hasSecret={account.two_factor_enabled} canReveal={canRevealCredentials} onSaved={onAccountSaved} /></TableCell>
     <TableCell><EditableAccountCell accountId={account.id} field="phone" value={account.phone} canEdit={canManage} onSaved={onAccountSaved} /></TableCell>
     <TableCell><span title="Chưa có kênh" className="block max-w-full truncate rounded-full bg-amber-100 px-2 py-1 text-center text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">Chưa có kênh</span></TableCell>
     <TableCell colSpan={6} className="text-center text-slate-300">—</TableCell>

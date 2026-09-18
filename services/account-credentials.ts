@@ -1,6 +1,6 @@
 import "server-only";
 import { AppError } from "@/lib/api-error";
-import { decryptAccountSecret, encryptAccountSecret } from "@/lib/crypto/account-secrets";
+import { decryptAccountSecret, encryptAccountSecret, isLegacyAccountSecret } from "@/lib/crypto/account-secrets";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export interface AccountDetailsUpdate {
@@ -19,7 +19,7 @@ export interface AccountCreateInput {
   twoFactorSecret?: string | null;
 }
 
-export async function getAccountCredentials(accountId: string): Promise<{ password: string | null; twoFactorSecret: string | null }> {
+export async function getAccountCredentials(accountId: string, actorId: string): Promise<{ password: string | null; twoFactorSecret: string | null }> {
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin.from("account_secrets").select("password_encrypted,two_factor_secret_encrypted").eq("account_id", accountId).maybeSingle();
   if (error) throw error;
@@ -28,6 +28,23 @@ export async function getAccountCredentials(accountId: string): Promise<{ passwo
     decryptAccountSecret(data.password_encrypted),
     decryptAccountSecret(data.two_factor_secret_encrypted),
   ]);
+
+  if (process.env.ACCOUNT_SECRETS_ENCRYPTION_KEY && (isLegacyAccountSecret(data.password_encrypted) || isLegacyAccountSecret(data.two_factor_secret_encrypted))) {
+    const { error: migrationError } = await admin.from("account_secrets").update({
+      password_encrypted: password && isLegacyAccountSecret(data.password_encrypted) ? await encryptAccountSecret(password) : data.password_encrypted,
+      two_factor_secret_encrypted: twoFactorSecret && isLegacyAccountSecret(data.two_factor_secret_encrypted) ? await encryptAccountSecret(twoFactorSecret) : data.two_factor_secret_encrypted,
+    }).eq("account_id", accountId);
+    if (migrationError) throw migrationError;
+  }
+
+  const { error: auditError } = await admin.from("activity_logs").insert({
+    user_id: actorId,
+    action: "account.credentials_viewed",
+    entity_type: "account",
+    entity_id: accountId,
+    new_data: { has_password: Boolean(password), has_two_factor_secret: Boolean(twoFactorSecret) },
+  });
+  if (auditError) throw auditError;
   return { password, twoFactorSecret };
 }
 
@@ -83,10 +100,16 @@ export async function createAccount(input: AccountCreateInput) {
   if (error?.code === "23505") throw new AppError("ACCOUNT_EMAIL_EXISTS", "Email này đã có trong hệ thống.", 409);
   if (error) throw error;
   if (input.password || input.twoFactorSecret) {
-    await updateAccountDetails(data.id, { password: input.password ?? null, twoFactorSecret: input.twoFactorSecret ?? null });
-    const { data: updated, error: readError } = await admin.from("accounts").select("*").eq("id", data.id).single();
-    if (readError) throw readError;
-    return updated;
+    try {
+      await updateAccountDetails(data.id, { password: input.password ?? null, twoFactorSecret: input.twoFactorSecret ?? null });
+      const { data: updated, error: readError } = await admin.from("accounts").select("*").eq("id", data.id).single();
+      if (readError) throw readError;
+      return updated;
+    } catch (createError) {
+      const { error: rollbackError } = await admin.from("accounts").delete().eq("id", data.id);
+      if (rollbackError) console.error("Failed to roll back account creation", rollbackError);
+      throw createError;
+    }
   }
   return data;
 }

@@ -16,7 +16,7 @@ export default async function Home() {
   if (!profile) redirect("/dang-nhap?error=profile");
   const [dashboard, channels, workspace] = await Promise.all([
     getDashboardData(),
-    listChannels({ page: 1, pageSize: 500 }),
+    listChannels({ page: 1, pageSize: 50 }),
     getWorkspaceData(),
   ]);
   return <AppShell dashboard={dashboard} channels={channels} workspace={workspace} user={{ name: profile.full_name || user.email || "Người dùng", role: profile.role }} />;

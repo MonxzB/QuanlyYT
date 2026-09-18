@@ -40,7 +40,7 @@ export function AppShell({ dashboard, channels, workspace, user }: { dashboard: 
   const canManage = user.role === "admin" || user.role === "manager";
   const signOut = async () => { await createSupabaseBrowserClient().auth.signOut(); router.replace("/dang-nhap"); router.refresh(); };
   const content = page === "dashboard" ? <DashboardLive data={dashboard} onNavigate={(value) => setPage(value as PageId)} />
-    : page === "channels" ? <ChannelsLive initial={channels} niches={workspace.niches} accounts={workspace.accounts} linkedAccountIds={workspace.linkedAccountIds} canManage={canManage} canDelete={user.role === "admin"} />
+    : page === "channels" ? <ChannelsLive initial={channels} niches={workspace.niches} accounts={workspace.accounts} linkedAccountIds={workspace.linkedAccountIds} canManage={canManage} canDelete={user.role === "admin"} canRevealCredentials={user.role === "admin"} />
     : page === "content" ? <ContentView data={workspace} />
     : page === "niches" ? <NichesLive initial={workspace.niches} canManage={canManage} canDelete={user.role === "admin"} />
     : page === "prompts" ? <PromptsLive initial={workspace.prompts} niches={workspace.niches} canManage={canManage} />

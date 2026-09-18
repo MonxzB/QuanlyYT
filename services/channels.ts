@@ -16,7 +16,7 @@ export interface ChannelUpdate {
 
 export async function listChannels(input: { page?: number; pageSize?: number; search?: string; status?: string; nicheId?: string } = {}): Promise<Paginated<Channel>> {
   const page = Math.max(1, input.page ?? 1);
-  const pageSize = Math.min(500, Math.max(1, input.pageSize ?? 100));
+  const pageSize = Math.min(100, Math.max(1, input.pageSize ?? 50));
   const from = (page - 1) * pageSize;
   const supabase = await createSupabaseServerClient();
   let query = supabase.from("channels").select(CHANNEL_SELECT, { count: "exact" });
@@ -103,7 +103,11 @@ export async function createChannel(input: {
     subscriber_change: 0,
     view_change: 0,
   });
-  if (metricError) throw metricError;
+  if (metricError) {
+    const { error: rollbackError } = await admin.from("channels").delete().eq("id", data.id);
+    if (rollbackError) console.error("Failed to roll back channel creation", rollbackError);
+    throw metricError;
+  }
   await admin.from("activity_logs").insert({ user_id: actorId, channel_id: data.id, action: "channel.created", entity_type: "channel", entity_id: data.id, new_data: { name: data.name } });
   return data as unknown as Channel;
 }
@@ -213,7 +217,7 @@ export async function syncChannel(id: string, actorId: string): Promise<{ channe
       like_count: video.likeCount,
       comment_count: video.commentCount,
       last_synced_at: now,
-    })), { onConflict: "youtube_video_id" });
+    })), { onConflict: "youtube_video_id,channel_id,reference_channel_id" });
     if (error) throw error;
   }
   const today = now.slice(0, 10);
@@ -234,14 +238,30 @@ export async function syncChannel(id: string, actorId: string): Promise<{ channe
   return { channel: updated as unknown as Channel, syncedVideos: videos.length };
 }
 
-export async function syncAllChannels(actorId: string) {
+export async function syncAllChannels(actorId: string, input: { before: string; limit?: number; excludedIds?: string[] }) {
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin.from("channels").select("id").not("status", "in", '("paused","dead","suspended")').order("last_synced_at", { ascending: true, nullsFirst: true }).limit(25);
+  const limit = Math.min(5, Math.max(1, input.limit ?? 3));
+  let query = admin.from("channels")
+    .select("id")
+    .not("status", "in", '("paused","dead","suspended")')
+    .or(`last_synced_at.is.null,last_synced_at.lt.${input.before}`)
+    .order("last_synced_at", { ascending: true, nullsFirst: true })
+    .limit(limit + 1);
+  if (input.excludedIds?.length) query = query.not("id", "in", `(${input.excludedIds.join(",")})`);
+  const { data, error } = await query;
   if (error) throw error;
+  const channels = (data ?? []).slice(0, limit);
   const results: Array<{ id: string; ok: boolean; error?: string }> = [];
-  for (const channel of data ?? []) {
+  await Promise.all(channels.map(async (channel) => {
     try { await syncChannel(channel.id, actorId); results.push({ id: channel.id, ok: true }); }
-    catch (error) { results.push({ id: channel.id, ok: false, error: error instanceof Error ? error.message : "Lỗi không xác định" }); }
-  }
-  return { processed: results.length, succeeded: results.filter((item) => item.ok).length, failed: results.filter((item) => !item.ok).length, results };
+    catch (syncError) { results.push({ id: channel.id, ok: false, error: syncError instanceof Error ? syncError.message : "Lỗi không xác định" }); }
+  }));
+  return {
+    processed: results.length,
+    succeeded: results.filter((item) => item.ok).length,
+    failed: results.filter((item) => !item.ok).length,
+    attemptedIds: channels.map((channel) => channel.id),
+    hasMore: (data ?? []).length > limit,
+    results,
+  };
 }

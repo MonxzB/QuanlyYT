@@ -63,15 +63,23 @@ async function upsertAccount(admin: AdminClient, row: YoutubeWorkbookRow, source
     ? await admin.from("accounts").update(payload).eq("id", existing.id).select("id").single()
     : await admin.from("accounts").insert({ ...payload, sort_order: Date.now() }).select("id").single();
   if (error) throw error;
-  if (row.password || row.twoFactorSecret) {
-    const { data: existingSecrets, error: secretReadError } = await admin.from("account_secrets").select("password_encrypted,two_factor_secret_encrypted").eq("account_id", data.id).maybeSingle();
-    if (secretReadError) throw secretReadError;
-    const { error: secretError } = await admin.from("account_secrets").upsert({
-      account_id: data.id,
-      password_encrypted: row.password ? await encryptAccountSecret(row.password) : existingSecrets?.password_encrypted ?? null,
-      two_factor_secret_encrypted: row.twoFactorSecret ? await encryptAccountSecret(row.twoFactorSecret) : existingSecrets?.two_factor_secret_encrypted ?? null,
-    }, { onConflict: "account_id" });
-    if (secretError) throw secretError;
+  try {
+    if (row.password || row.twoFactorSecret) {
+      const { data: existingSecrets, error: secretReadError } = await admin.from("account_secrets").select("password_encrypted,two_factor_secret_encrypted").eq("account_id", data.id).maybeSingle();
+      if (secretReadError) throw secretReadError;
+      const { error: secretError } = await admin.from("account_secrets").upsert({
+        account_id: data.id,
+        password_encrypted: row.password ? await encryptAccountSecret(row.password) : existingSecrets?.password_encrypted ?? null,
+        two_factor_secret_encrypted: row.twoFactorSecret ? await encryptAccountSecret(row.twoFactorSecret) : existingSecrets?.two_factor_secret_encrypted ?? null,
+      }, { onConflict: "account_id" });
+      if (secretError) throw secretError;
+    }
+  } catch (secretError) {
+    if (!existing) {
+      const { error: rollbackError } = await admin.from("accounts").delete().eq("id", data.id);
+      if (rollbackError) console.error("Failed to roll back imported account", rollbackError);
+    }
+    throw secretError;
   }
   return data.id;
 }
@@ -127,7 +135,13 @@ async function importChannel(admin: AdminClient, row: YoutubeWorkbookRow, actorI
     subscriber_change: 0,
     view_change: 0,
   }, { onConflict: "channel_id,metric_date" });
-  if (metricError) throw metricError;
+  if (metricError) {
+    if (!existing) {
+      const { error: rollbackError } = await admin.from("channels").delete().eq("id", channelId);
+      if (rollbackError) console.error("Failed to roll back imported channel", rollbackError);
+    }
+    throw metricError;
+  }
   return existing ? "updated" : "created";
 }
 

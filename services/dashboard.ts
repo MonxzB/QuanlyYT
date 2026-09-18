@@ -72,6 +72,7 @@ function activityLabel(action: string) {
     "channel.created": "Đã thêm kênh",
     "channel.synced": "Đã đồng bộ dữ liệu YouTube",
     "channel.updated": "Đã cập nhật kênh",
+    "account.credentials_viewed": "Đã xem thông tin đăng nhập",
   };
   return labels[action] ?? "Đã cập nhật dữ liệu";
 }

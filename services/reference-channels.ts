@@ -65,7 +65,7 @@ export async function syncReferenceChannel(id: string) {
       like_count: video.likeCount,
       comment_count: video.commentCount,
       last_synced_at: now,
-    })), { onConflict: "youtube_video_id" });
+    })), { onConflict: "youtube_video_id,channel_id,reference_channel_id" });
     if (videoError) throw videoError;
   }
   return { reference: data as unknown as ReferenceChannel, syncedVideos: videos.length };

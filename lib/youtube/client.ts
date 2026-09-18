@@ -50,7 +50,15 @@ interface RawVideo {
 async function youtubeGet<T>(path: string, params: Record<string, string>): Promise<T> {
   const { YOUTUBE_API_KEY } = getServerEnv();
   const query = new URLSearchParams({ ...params, key: YOUTUBE_API_KEY });
-  const response = await fetch(`${API_ROOT}/${path}?${query}`, { next: { revalidate: 0 } });
+  let response: Response;
+  try {
+    response = await fetch(`${API_ROOT}/${path}?${query}`, { next: { revalidate: 0 }, signal: AbortSignal.timeout(15_000) });
+  } catch (error) {
+    if (error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)) {
+      throw new AppError("YOUTUBE_TIMEOUT", "YouTube API phản hồi quá chậm. Vui lòng thử lại.", 504);
+    }
+    throw new AppError("YOUTUBE_NETWORK", "Không thể kết nối YouTube API.", 502);
+  }
   const body = await response.json() as ApiResponse<T>;
   if (!response.ok || body.error) {
     const reason = body.error?.errors?.[0]?.reason;

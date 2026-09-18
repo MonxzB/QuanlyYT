@@ -17,7 +17,7 @@ const createSchema = z.object({
 
 const listSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(500).default(100),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
   search: z.string().trim().max(100).optional(),
   status: z.enum(["purchased", "setup", "warm_up", "active", "paused", "warning", "suspended", "dead"]).optional(),
   nicheId: z.string().uuid().optional(),

@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { Account, Channel, ChannelStatus, Niche, Paginated } from "@/types/domain";
 import type { YoutubeWorkbookImportResult, YoutubeWorkbookPreview } from "@/types/workbook-import";
 import { AddAccountSheet } from "./accounts-live";
-import { compactNumber, healthLabels, relativeDate, statusLabels } from "./format";
+import { compactNumber, relativeDate, statusLabels } from "./format";
 
 type Preview = {
   id: string; title: string; description: string; customUrl: string | null; avatarUrl: string | null;
@@ -29,7 +29,7 @@ type ChannelsLiveProps = {
   canRevealCredentials: boolean;
 };
 
-type SortKey = "channel" | "email" | "recoveryEmail" | "phone" | "status" | "niche" | "subscribers" | "views" | "videos" | "lastVideo" | "health";
+type SortKey = "channel" | "email" | "recoveryEmail" | "phone" | "status" | "niche" | "subscribers" | "views" | "videos" | "lastVideo";
 type SortDirection = "asc" | "desc";
 type ChannelBoardRow = { kind: "channel"; channel: Channel } | { kind: "account"; account: Account };
 
@@ -215,29 +215,28 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
     </div>
     <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-3"><div className="relative min-w-60 flex-1"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm theo tên, handle hoặc Channel ID…" className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none focus:border-indigo-300 focus:bg-white" /></div><select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="">Tất cả trạng thái</option>{statuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{sortKey && <Button type="button" variant="ghost" onClick={() => { setSortKey(null); setSortDirection("asc"); }}>Bỏ sắp xếp</Button>}</div>
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-      <Table className="min-w-[1440px] table-fixed">
+      <Table className="min-w-[1600px] table-fixed">
         <TableHeader className="bg-slate-50"><TableRow>
           <TableHead className="w-10" />
-          <SortableHead className="w-[100px]" column="channel" label="Kênh" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
-          <SortableHead className="w-[100px]" column="email" label="Email" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
-          <TableHead className="w-[100px]">Mật khẩu</TableHead>
-          <SortableHead className="w-[100px]" column="recoveryEmail" label="Email 2" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
-          <TableHead className="w-[100px]">2FA</TableHead>
-          <SortableHead className="w-[100px]" column="phone" label="SĐT" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
-          <SortableHead className="w-[100px]" column="status" label="Trạng thái" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
-          <SortableHead className="w-[100px]" column="niche" label="Chủ đề" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
-          <SortableHead className="w-[100px]" column="subscribers" label="Người đăng ký" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
-          <SortableHead className="w-[100px]" column="views" label="Lượt xem" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
-          <SortableHead className="w-[100px]" column="videos" label="Video" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
-          <SortableHead className="w-[100px]" column="lastVideo" label="Video gần nhất" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
-          <SortableHead className="w-[100px]" column="health" label="Sức khỏe" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
-          <TableHead className="w-[100px]" />
+          <SortableHead className="w-[120px]" column="channel" label="Kênh" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
+          <SortableHead className="w-[120px]" column="email" label="Email" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
+          <TableHead className="w-[120px]">Mật khẩu</TableHead>
+          <SortableHead className="w-[120px]" column="recoveryEmail" label="Email 2" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
+          <TableHead className="w-[120px]">2FA</TableHead>
+          <SortableHead className="w-[120px]" column="phone" label="SĐT" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
+          <SortableHead className="w-[120px]" column="status" label="Trạng thái" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
+          <SortableHead className="w-[120px]" column="niche" label="Chủ đề" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
+          <SortableHead className="w-[120px]" column="subscribers" label="Người đăng ký" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
+          <SortableHead className="w-[120px]" column="views" label="Lượt xem" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
+          <SortableHead className="w-[120px]" column="videos" label="Video" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
+          <SortableHead className="w-[120px]" column="lastVideo" label="Video gần nhất" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
+          <TableHead className="w-[120px]" />
         </TableRow></TableHeader>
         <TableBody>
           {displayRows.map((row) => row.kind === "channel"
             ? <ChannelDataRow key={row.channel.id} channel={row.channel} canManage={canManage} canDelete={canDelete} canRevealCredentials={canRevealCredentials} canDrag={canReorder} dragging={draggingRowKey === `channel:${row.channel.id}`} onDragStart={() => setDraggingRowKey(`channel:${row.channel.id}`)} onDragEnd={() => setDraggingRowKey(null)} onDrop={() => void moveRow(`channel:${row.channel.id}`)} onAccountSaved={() => fetchPage(result.page)} onStatusSaved={() => fetchPage(result.page)} onEdit={() => setEditing(row.channel)} onSync={() => void sync(row.channel.id)} onRemove={() => void remove(row.channel)} />
             : <UnlinkedAccountRow key={`account-${row.account.id}`} account={row.account} canManage={canManage} canRevealCredentials={canRevealCredentials} canDrag={canReorder} dragging={draggingRowKey === `account:${row.account.id}`} onDragStart={() => setDraggingRowKey(`account:${row.account.id}`)} onDragEnd={() => setDraggingRowKey(null)} onDrop={() => void moveRow(`account:${row.account.id}`)} onAccountSaved={async () => { router.refresh(); }} onAddChannel={(accountId) => { setPendingAccountId(accountId); setAddOpen(true); }} />)}
-          {!displayRows.length && <TableRow><TableCell colSpan={15} className="h-40 text-center text-slate-400">{loading ? "Đang tải…" : "Chưa có kênh phù hợp."}</TableCell></TableRow>}
+          {!displayRows.length && <TableRow><TableCell colSpan={14} className="h-40 text-center text-slate-400">{loading ? "Đang tải…" : "Chưa có kênh phù hợp."}</TableCell></TableRow>}
         </TableBody>
       </Table>
     </div>
@@ -264,7 +263,6 @@ function ChannelDataRow({ channel, canManage, canDelete, canRevealCredentials, c
     <TableCell><MetricTrend value={channel.view_count} change={channel.view_change ?? 0} /></TableCell>
     <TableCell><MetricTrend value={channel.video_count} change={channel.video_change ?? 0} format={(value) => value.toLocaleString("vi-VN")} /></TableCell>
     <TableCell>{relativeDate(channel.last_video_at)}</TableCell>
-    <TableCell>{healthLabels[channel.health_status]}</TableCell>
     <TableCell><div className="flex justify-end gap-0">{canManage && <><Button onClick={onEdit} variant="ghost" size="icon-sm" title="Chỉnh sửa" className="size-5"><Pencil className="size-3" /></Button><Button onClick={onSync} variant="ghost" size="icon-sm" title="Đồng bộ" className="size-5"><RefreshCw className="size-3" /></Button></>}{canDelete && <Button onClick={onRemove} variant="ghost" size="icon-sm" title="Xóa kênh" className="size-5 text-red-600 hover:text-red-700"><Trash2 className="size-3" /></Button>}<Button asChild variant="ghost" size="icon-sm" className="size-5"><a href={channel.youtube_url} target="_blank" rel="noreferrer" title="Mở trên YouTube"><ExternalLink className="size-3" /></a></Button></div></TableCell>
   </TableRow>;
 }
@@ -315,7 +313,7 @@ function channelSortValue(channel: Channel, key: SortKey): string | number | nul
   if (key === "views") return channel.view_count;
   if (key === "videos") return channel.video_count;
   if (key === "lastVideo") return channel.last_video_at ? Date.parse(channel.last_video_at) : null;
-  return healthLabels[channel.health_status];
+  return null;
 }
 
 function accountSortValue(account: Account, key: SortKey): string | number | null {
@@ -336,7 +334,7 @@ function UnlinkedAccountRow({ account, canManage, canRevealCredentials, canDrag,
     <TableCell><SecretCell accountId={account.id} kind="twoFactorSecret" hasSecret={account.two_factor_enabled} canReveal={canRevealCredentials} onSaved={onAccountSaved} /></TableCell>
     <TableCell><EditableAccountCell accountId={account.id} field="phone" value={account.phone} canEdit={canManage} onSaved={onAccountSaved} /></TableCell>
     <TableCell><span title="Chưa có kênh" className="block max-w-full truncate rounded-full bg-amber-100 px-2 py-1 text-center text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">Chưa có kênh</span></TableCell>
-    <TableCell colSpan={6} className="text-center text-slate-300">—</TableCell>
+    <TableCell colSpan={5} className="text-center text-slate-300">—</TableCell>
     <TableCell>{canManage && <Button type="button" variant="ghost" size="icon-sm" className="size-5" onClick={() => onAddChannel(account.id)} title="Tạo kênh và liên kết tài khoản"><Plus className="size-3" /></Button>}</TableCell>
   </TableRow>;
 }

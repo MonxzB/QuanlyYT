@@ -5,6 +5,7 @@ import { getCurrentUser, getUserProfile } from "@/lib/supabase/auth";
 import { listChannelOptions, listChannels } from "@/services/channels";
 import { getDashboardData } from "@/services/dashboard";
 import { getWorkspaceData } from "@/services/workspace";
+import { refreshPublishingReminders } from "@/services/publishing-plans";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
   if (!user) redirect("/dang-nhap");
   const profile = await getUserProfile(user.id);
   if (!profile) redirect("/dang-nhap?error=profile");
+  await refreshPublishingReminders();
   const [dashboard, channels, channelOptions, workspace] = await Promise.all([
     getDashboardData(),
     listChannels({ page: 1, pageSize: 50 }),

@@ -72,6 +72,7 @@ function activityLabel(action: string) {
     "channel.created": "Đã thêm kênh",
     "channel.synced": "Đã đồng bộ dữ liệu YouTube",
     "channel.updated": "Đã cập nhật kênh",
+    "channel.publish_completed": "Đã xác nhận đăng video và chuyển lịch kế tiếp",
     "account.credentials_viewed": "Đã xem thông tin đăng nhập",
     "channel.video_views_scanned": "Đã quét tổng lượt xem video công khai",
   };

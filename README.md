@@ -34,6 +34,7 @@
    - `012_video_tags.sql`
    - `013_channel_video_view_scan.sql`
    - `014_youtube_quota_usage.sql`
+   - `015_channel_publishing_plans.sql`
 3. Tạo người dùng trong Supabase Auth.
 4. Cấp quyền `admin` cho người dùng đầu tiên trong SQL Editor:
 

@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars, @next/next/no-img-element */
 
 import { useEffect, useState, type MouseEvent } from "react";
-import { AlertTriangle, Bell, BookOpenText, CirclePlay, FolderKanban, Globe2, KeyRound, LayoutDashboard, Lightbulb, LogOut, MessageSquareText, Settings, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Bell, BookOpenText, CalendarClock, CirclePlay, FolderKanban, Globe2, KeyRound, LayoutDashboard, Lightbulb, LoaderCircle, LogOut, MessageSquareText, Settings, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast, Toaster } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -63,6 +63,17 @@ export function AppShell({ dashboard, channels, channelOptions, workspace, user,
     window.addEventListener("popstate", syncPageFromUrl);
     return () => window.removeEventListener("popstate", syncPageFromUrl);
   }, []);
+  useEffect(() => {
+    const id = window.setInterval(async () => {
+      try {
+        const response = await fetch("/api/publishing-plans/reminders", { method: "POST" });
+        if (response.ok) router.refresh();
+      } catch {
+        // Việc kiểm tra nền không được làm gián đoạn thao tác đang có trên trang.
+      }
+    }, 3_600_000);
+    return () => window.clearInterval(id);
+  }, [router]);
   const content = page === "dashboard" ? <DashboardLive data={dashboard} onNavigate={(value) => setPage(value as PageId)} />
     : page === "channels" ? <ChannelsLive initial={channels} niches={workspace.niches} accounts={workspace.accounts} linkedAccountIds={workspace.linkedAccountIds} canManage={canManage} canDelete={user.role === "admin"} canRevealCredentials={user.role === "admin"} />
     : page === "keyword-hunter" ? <KeywordHunterLive channels={channelOptions} />
@@ -104,7 +115,29 @@ function DataTable({ headers, children, empty }: { headers: string[]; children: 
 function ProfilesView({ data }: { data: WorkspaceData }) { return <div className="space-y-4"><Title title="Hồ sơ trình duyệt" description="Theo dõi môi trường trình duyệt tách biệt và nhãn IP." /><DataTable empty={!data.browserProfiles.length} headers={["Tên hồ sơ", "Nhãn IP", "Quốc gia", "Trạng thái", "Ghi chú"]}>{data.browserProfiles.map((item) => <TableRow key={item.id}><TableCell className="font-semibold">{item.name}</TableCell><TableCell className="font-mono text-xs">{item.ip_label ?? "—"}</TableCell><TableCell>{item.country ?? "—"}</TableCell><TableCell>{item.status}</TableCell><TableCell>{item.notes ?? "—"}</TableCell></TableRow>)}</DataTable></div>; }
 function ResearchView({ data }: { data: WorkspaceData }) { return <div className="space-y-4"><Title title="Nghiên cứu" description="Theo dõi kênh tham khảo và các video mới nhất." /><DataTable empty={!data.references.length} headers={["Kênh tham khảo", "Chủ đề", "Người đăng ký", "Lượt xem", "Video", "Đồng bộ"]}>{data.references.map((item) => <TableRow key={item.id}><TableCell><a href={item.youtube_url} target="_blank" rel="noreferrer" className="font-semibold text-indigo-600">{item.name}</a></TableCell><TableCell>{item.niche?.name ?? "Chưa phân loại"}</TableCell><TableCell>{compactNumber(item.subscriber_count)}</TableCell><TableCell>{compactNumber(item.view_count)}</TableCell><TableCell>{item.video_count.toLocaleString("vi-VN")}</TableCell><TableCell>{relativeDate(item.last_synced_at)}</TableCell></TableRow>)}</DataTable>{data.recentVideos.length > 0 && <div><h3 className="mb-3 font-semibold">Video mới ghi nhận</h3><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{data.recentVideos.slice(0, 9).map((video) => <a key={video.id} href={`https://youtube.com/watch?v=${video.youtube_video_id}`} target="_blank" rel="noreferrer" className="overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:border-indigo-200">{video.thumbnail_url ? <img src={video.thumbnail_url} alt="" className="aspect-video w-full object-cover" /> : <div className="grid aspect-video place-items-center bg-slate-100"><Youtube /></div>}<div className="p-4"><h4 className="line-clamp-2 font-semibold">{video.title}</h4><p className="mt-2 text-sm text-slate-500">{compactNumber(video.view_count)} lượt xem · {relativeDate(video.published_at)}</p></div></a>)}</div></div>}</div>; }
 function ContentView({ data }: { data: WorkspaceData }) { const stages = [["idea","Ý tưởng"],["script","Kịch bản"],["voice","Lồng tiếng"],["editing","Dựng video"],["thumbnail","Ảnh bìa"],["scheduled","Đã lên lịch"],["published","Đã xuất bản"]]; return <div className="space-y-4"><Title title="Quy trình nội dung" description="Theo dõi tiến độ từ ý tưởng đến xuất bản." /><div className="flex gap-3 overflow-x-auto pb-4">{stages.map(([value,label]) => <section key={value} className="w-[280px] shrink-0"><div className="mb-2 flex justify-between px-1"><h3 className="text-sm font-semibold">{label}</h3><span className="rounded-full bg-slate-200 px-2 text-xs">{data.contentTasks.filter((item) => item.stage === value).length}</span></div><div className="min-h-72 space-y-2 rounded-xl bg-slate-100 p-2">{data.contentTasks.filter((item) => item.stage === value).map((item) => <article key={item.id} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm"><h4 className="text-sm font-semibold">{item.title}</h4><p className="mt-1 text-xs text-slate-500">{item.channel?.name ?? "Chưa gán kênh"}</p><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full bg-indigo-500" style={{ width: `${item.progress}%` }} /></div></article>)}</div></section>)}</div></div>; }
-function AlertsView({ data }: { data: WorkspaceData }) { const [alerts, setAlerts] = useState(data.alerts); const resolve = async (id: string) => { const response = await fetch(`/api/alerts/${id}/resolve`, { method: "POST" }); if (response.ok) { setAlerts((items) => items.map((item) => item.id === id ? { ...item, is_resolved: true } : item)); toast.success("Đã xử lý cảnh báo."); } else toast.error("Không thể cập nhật cảnh báo."); }; return <div className="space-y-4"><Title title="Trung tâm cảnh báo" description="Xử lý rủi ro và bất thường trong mạng lưới." /><div className="overflow-hidden rounded-xl border border-slate-200 bg-white">{alerts.length ? alerts.map((item) => <div key={item.id} className={`flex items-center gap-3 border-b border-slate-100 p-4 ${item.is_resolved ? "opacity-50" : ""}`}><span className={`grid size-10 place-items-center rounded-xl ${item.severity === "critical" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"}`}><AlertTriangle className="size-5" /></span><div className="min-w-0 flex-1"><p className="font-semibold">{item.channel?.name ?? item.title}</p><p className="text-sm text-slate-500">{item.message}</p></div>{!item.is_resolved && <Button size="sm" variant="outline" onClick={() => void resolve(item.id)}>Đánh dấu đã xử lý</Button>}</div>) : <Empty text="Không có cảnh báo." />}</div></div>; }
+function AlertsView({ data }: { data: WorkspaceData }) {
+  const router = useRouter();
+  const [alerts, setAlerts] = useState(data.alerts);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const handleAlert = async (item: WorkspaceData["alerts"][number]) => {
+    const publishReminder = item.type.startsWith("publish_schedule:");
+    setBusyId(item.id);
+    try {
+      const endpoint = publishReminder && item.channel_id ? `/api/channels/${item.channel_id}/publishing-plan/complete` : `/api/alerts/${item.id}/resolve`;
+      const response = await fetch(endpoint, { method: "POST" });
+      const body = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(body.error || "Không thể cập nhật cảnh báo.");
+      setAlerts((items) => items.map((alert) => alert.id === item.id ? { ...alert, is_resolved: true } : alert));
+      toast.success(publishReminder ? "Đã ghi nhận video và chuyển sang lịch kế tiếp." : "Đã xử lý cảnh báo.");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không thể cập nhật cảnh báo.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+  return <div className="space-y-4"><Title title="Trung tâm cảnh báo" description="Theo dõi lịch đăng, rủi ro và bất thường trong mạng lưới." /><div className="overflow-hidden rounded-xl border border-slate-200 bg-white">{alerts.length ? alerts.map((item) => { const publishReminder = item.type.startsWith("publish_schedule:"); const Icon = publishReminder ? CalendarClock : AlertTriangle; return <div key={item.id} className={`flex items-center gap-3 border-b border-slate-100 p-4 ${item.is_resolved ? "opacity-50" : ""}`}><span className={`grid size-10 place-items-center rounded-xl ${item.severity === "critical" ? "bg-red-50 text-red-600" : publishReminder ? "bg-indigo-50 text-indigo-600" : "bg-amber-50 text-amber-600"}`}><Icon className="size-5" /></span><div className="min-w-0 flex-1"><p className="font-semibold">{item.channel?.name ?? item.title}</p><p className="text-sm text-slate-500">{item.message}</p></div>{!item.is_resolved && <Button size="sm" variant="outline" onClick={() => void handleAlert(item)} disabled={busyId === item.id}>{busyId === item.id && <LoaderCircle className="animate-spin" />}{publishReminder ? "Đã đăng" : "Đánh dấu đã xử lý"}</Button>}</div>; }) : <Empty text="Không có cảnh báo." />}</div></div>;
+}
 function SettingsView() { return <div className="space-y-4"><Title title="Cài đặt" description="Thông tin bảo mật và kết nối dữ liệu." /><div className="rounded-xl border border-slate-200 bg-white p-5"><span className="grid size-10 place-items-center rounded-xl bg-emerald-50 text-emerald-600"><ShieldCheck /></span><h3 className="mt-4 font-semibold">Bảo mật dữ liệu</h3><p className="mt-1 text-sm leading-6 text-slate-500">Dữ liệu được bảo vệ bằng Supabase Auth và RLS. Secret key và YouTube API key chỉ được dùng ở phía server.</p></div></div>; }
 function roleLabel(role: UserRole) { return role === "admin" ? "Quản trị viên" : role === "manager" ? "Quản lý" : "Người xem"; }
 function pageTitle(page: PageId) { return nav.find((item) => item.id === page)?.label ?? "Cài đặt"; }

@@ -44,6 +44,9 @@ export interface Channel {
   started_at: string | null;
   description: string | null;
   notes: string | null;
+  publish_interval_days: number | null;
+  next_publish_date: string | null;
+  publish_reminder_days: number;
   sort_order: number;
   created_at: string;
   updated_at: string;

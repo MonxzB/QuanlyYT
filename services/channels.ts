@@ -12,6 +12,9 @@ export interface ChannelUpdate {
   nicheId?: string | null;
   accountId?: string | null;
   notes?: string | null;
+  publishIntervalDays?: number | null;
+  nextPublishDate?: string | null;
+  publishReminderDays?: number;
 }
 
 export async function listChannels(input: { page?: number; pageSize?: number; search?: string; status?: string; nicheId?: string } = {}): Promise<Paginated<Channel>> {
@@ -119,6 +122,9 @@ export async function updateChannel(id: string, input: ChannelUpdate, actorId: s
   if (input.nicheId !== undefined) payload.niche_id = input.nicheId;
   if (input.accountId !== undefined) payload.account_id = input.accountId;
   if (input.notes !== undefined) payload.notes = input.notes;
+  if (input.publishIntervalDays !== undefined) payload.publish_interval_days = input.publishIntervalDays;
+  if (input.nextPublishDate !== undefined) payload.next_publish_date = input.nextPublishDate;
+  if (input.publishReminderDays !== undefined) payload.publish_reminder_days = input.publishReminderDays;
   const { data, error } = await admin.from("channels").update(payload).eq("id", id).select(CHANNEL_SELECT).maybeSingle();
   if (error) throw error;
   if (!data) throw new AppError("CHANNEL_NOT_FOUND", "Không tìm thấy kênh.", 404);

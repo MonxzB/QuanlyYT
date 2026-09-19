@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, CirclePlay as Youtube, ExternalLink, Eye, EyeOff, FileSpreadsheet, Gauge, GripVertical, LoaderCircle, Minus, Pencil, Plus, RefreshCw, Search, Trash2, TrendingDown, TrendingUp, Upload, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, CalendarClock, Check, CirclePlay as Youtube, ExternalLink, Eye, EyeOff, FileSpreadsheet, Gauge, GripVertical, LoaderCircle, Minus, Pencil, Plus, RefreshCw, Search, Trash2, TrendingDown, TrendingUp, Upload, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,7 @@ type ChannelsLiveProps = {
   canRevealCredentials: boolean;
 };
 
-type SortKey = "channel" | "email" | "recoveryEmail" | "phone" | "status" | "niche" | "subscribers" | "views" | "videos" | "lastVideo";
+type SortKey = "channel" | "email" | "recoveryEmail" | "phone" | "status" | "niche" | "subscribers" | "views" | "videos" | "nextPublish" | "lastVideo";
 type SortDirection = "asc" | "desc";
 type ChannelBoardRow = { kind: "channel"; channel: Channel } | { kind: "account"; account: Account };
 type VideoViewScanProgress = { done: boolean; processedVideos: number; totalViews: number };
@@ -66,6 +66,7 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
   const [loading, setLoading] = useState(false);
   const [syncingAll, setSyncingAll] = useState(false);
   const [scanningViewsId, setScanningViewsId] = useState<string | null>(null);
+  const [markingPublishedId, setMarkingPublishedId] = useState<string | null>(null);
   const [syncFailures, setSyncFailures] = useState<SyncFailure[]>([]);
   const [addOpen, setAddOpen] = useState(false);
   const [addAccountOpen, setAddAccountOpen] = useState(false);
@@ -252,6 +253,25 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
     }
   };
 
+  const markPublished = async (channel: Channel) => {
+    if (!channel.publish_interval_days || !channel.next_publish_date || markingPublishedId) return;
+    if (!window.confirm(`Xác nhận ${channel.name} đã đăng video? Lịch kế tiếp sẽ được tính từ hôm nay.`)) return;
+    setMarkingPublishedId(channel.id);
+    const toastId = toast.loading("Đang chuyển sang lịch đăng kế tiếp…");
+    try {
+      const response = await fetch(`/api/channels/${channel.id}/publishing-plan/complete`, { method: "POST" });
+      const body = await response.json() as { data?: { nextPublishDate: string }; error?: string };
+      if (!response.ok || !body.data) throw new Error(body.error || "Không thể cập nhật lịch đăng.");
+      toast.success(`Đã ghi nhận. Lịch kế tiếp: ${formatPublishDate(body.data.nextPublishDate)}.`, { id: toastId });
+      await fetchPage(result.page);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không thể cập nhật lịch đăng.", { id: toastId });
+    } finally {
+      setMarkingPublishedId(null);
+    }
+  };
+
   const remove = async (channel: Channel) => {
     if (!window.confirm(`Xóa kênh “${channel.name}” và toàn bộ video, metrics, cảnh báo liên quan?`)) return;
     const toastId = toast.loading("Đang xóa kênh…");
@@ -304,7 +324,7 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
     {syncFailures.length > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950"><div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" /><div className="min-w-0 flex-1"><p className="font-semibold">{syncFailures.length} kênh cần kiểm tra lại</p><div className="mt-2 space-y-1.5">{syncFailures.map((failure) => <div key={`${failure.id}-${failure.stage}`} className="text-sm"><span className="font-semibold">{failure.name}</span><span className="text-amber-700"> · {failure.stage}: {failure.error}</span></div>)}</div></div><Button type="button" variant="ghost" size="icon-sm" onClick={() => setSyncFailures([])} title="Đóng thông báo" className="shrink-0 text-amber-700 hover:bg-amber-100"><X /></Button></div></div>}
     <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-3"><div className="relative min-w-60 flex-1"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm theo tên, handle hoặc Channel ID…" className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none focus:border-indigo-300 focus:bg-white" /></div><select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="">Tất cả trạng thái</option>{statuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{sortKey && <Button type="button" variant="ghost" onClick={() => { setSortKey(null); setSortDirection("asc"); }}>Bỏ sắp xếp</Button>}</div>
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-      <Table className="min-w-[1600px] table-fixed">
+      <Table className="min-w-[1720px] table-fixed">
         <TableHeader className="bg-slate-50"><TableRow>
           <TableHead className="w-10" />
           <SortableHead className="w-[120px]" column="channel" label="Kênh" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
@@ -318,14 +338,15 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
           <SortableHead className="w-[120px]" column="subscribers" label="Người đăng ký" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
           <SortableHead className="w-[120px]" column="views" label="Lượt xem" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
           <SortableHead className="w-[120px]" column="videos" label="Video" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
+          <SortableHead className="w-[120px]" column="nextPublish" label="Lịch đăng" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
           <SortableHead className="w-[120px]" column="lastVideo" label="Video gần nhất" activeKey={sortKey} direction={sortDirection} onSort={toggleSort} />
           <TableHead className="w-[120px]" />
         </TableRow></TableHeader>
         <TableBody>
           {displayRows.map((row) => row.kind === "channel"
-            ? <ChannelDataRow key={row.channel.id} channel={row.channel} canManage={canManage} canDelete={canDelete} canRevealCredentials={canRevealCredentials} canDrag={canReorder} scanningViews={scanningViewsId === row.channel.id} dragging={draggingRowKey === `channel:${row.channel.id}`} onDragStart={() => setDraggingRowKey(`channel:${row.channel.id}`)} onDragEnd={() => setDraggingRowKey(null)} onDrop={() => void moveRow(`channel:${row.channel.id}`)} onAccountSaved={() => fetchPage(result.page)} onStatusSaved={() => fetchPage(result.page)} onEdit={() => setEditing(row.channel)} onSync={() => void sync(row.channel.id)} onScanViews={() => void scanVideoViews(row.channel)} onRemove={() => void remove(row.channel)} />
+            ? <ChannelDataRow key={row.channel.id} channel={row.channel} canManage={canManage} canDelete={canDelete} canRevealCredentials={canRevealCredentials} canDrag={canReorder} scanningViews={scanningViewsId === row.channel.id} markingPublished={markingPublishedId === row.channel.id} dragging={draggingRowKey === `channel:${row.channel.id}`} onDragStart={() => setDraggingRowKey(`channel:${row.channel.id}`)} onDragEnd={() => setDraggingRowKey(null)} onDrop={() => void moveRow(`channel:${row.channel.id}`)} onAccountSaved={() => fetchPage(result.page)} onStatusSaved={() => fetchPage(result.page)} onEdit={() => setEditing(row.channel)} onSync={() => void sync(row.channel.id)} onScanViews={() => void scanVideoViews(row.channel)} onMarkPublished={() => void markPublished(row.channel)} onRemove={() => void remove(row.channel)} />
             : <UnlinkedAccountRow key={`account-${row.account.id}`} account={row.account} canManage={canManage} canRevealCredentials={canRevealCredentials} canDrag={canReorder} dragging={draggingRowKey === `account:${row.account.id}`} onDragStart={() => setDraggingRowKey(`account:${row.account.id}`)} onDragEnd={() => setDraggingRowKey(null)} onDrop={() => void moveRow(`account:${row.account.id}`)} onAccountSaved={async () => { router.refresh(); }} onAddChannel={(accountId) => { setPendingAccountId(accountId); setAddOpen(true); }} />)}
-          {!displayRows.length && <TableRow><TableCell colSpan={14} className="h-40 text-center text-slate-400">{loading ? "Đang tải…" : "Chưa có kênh phù hợp."}</TableCell></TableRow>}
+          {!displayRows.length && <TableRow><TableCell colSpan={15} className="h-40 text-center text-slate-400">{loading ? "Đang tải…" : "Chưa có kênh phù hợp."}</TableCell></TableRow>}
         </TableBody>
       </Table>
     </div>
@@ -333,11 +354,11 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
     <AddChannelSheet key={pendingAccountId || "new-channel"} open={addOpen} onOpenChange={setAddOpen} niches={niches} accounts={accountItems} defaultAccountId={pendingAccountId} onCreated={async () => { setAddOpen(false); setPendingAccountId(""); await fetchPage(1); router.refresh(); }} />
     <AddAccountSheet open={addAccountOpen} onOpenChange={setAddAccountOpen} onCreated={() => { setAddAccountOpen(false); router.refresh(); }} />
     <ImportWorkbookSheet open={importOpen} onOpenChange={setImportOpen} onImported={async () => { await fetchPage(1); router.refresh(); }} />
-    {editing && <EditChannelSheet channel={editing} niches={niches} accounts={accountItems} onOpenChange={(open) => { if (!open) setEditing(null); }} onSaved={async () => { setEditing(null); await fetchPage(result.page); }} />}
+    {editing && <EditChannelSheet channel={editing} niches={niches} accounts={accountItems} onOpenChange={(open) => { if (!open) setEditing(null); }} onSaved={async () => { setEditing(null); await fetchPage(result.page); router.refresh(); }} />}
   </div>;
 }
 
-function ChannelDataRow({ channel, canManage, canDelete, canRevealCredentials, canDrag, scanningViews, dragging, onDragStart, onDragEnd, onDrop, onAccountSaved, onStatusSaved, onEdit, onSync, onScanViews, onRemove }: { channel: Channel; canManage: boolean; canDelete: boolean; canRevealCredentials: boolean; canDrag: boolean; scanningViews: boolean; dragging: boolean; onDragStart: () => void; onDragEnd: () => void; onDrop: () => void; onAccountSaved: () => Promise<void>; onStatusSaved: () => Promise<void>; onEdit: () => void; onSync: () => void; onScanViews: () => void; onRemove: () => void }) {
+function ChannelDataRow({ channel, canManage, canDelete, canRevealCredentials, canDrag, scanningViews, markingPublished, dragging, onDragStart, onDragEnd, onDrop, onAccountSaved, onStatusSaved, onEdit, onSync, onScanViews, onMarkPublished, onRemove }: { channel: Channel; canManage: boolean; canDelete: boolean; canRevealCredentials: boolean; canDrag: boolean; scanningViews: boolean; markingPublished: boolean; dragging: boolean; onDragStart: () => void; onDragEnd: () => void; onDrop: () => void; onAccountSaved: () => Promise<void>; onStatusSaved: () => Promise<void>; onEdit: () => void; onSync: () => void; onScanViews: () => void; onMarkPublished: () => void; onRemove: () => void }) {
   return <TableRow onDragOver={(event) => { if (canDrag) event.preventDefault(); }} onDrop={() => { if (canDrag) onDrop(); }} className={dragging ? "opacity-50" : undefined}>
     <TableCell><span draggable={canDrag} onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", channel.id); onDragStart(); }} onDragEnd={onDragEnd} title={canDrag ? "Kéo để đổi vị trí" : canManage ? "Bỏ tìm kiếm, bộ lọc hoặc sắp xếp cột để kéo thả" : undefined} className={canDrag ? "inline-flex cursor-grab rounded p-1 text-slate-400 hover:bg-slate-100 active:cursor-grabbing" : "text-slate-300"}><GripVertical className="size-4" /></span></TableCell>
     <TableCell className="overflow-hidden"><a href={channel.youtube_url} target="_blank" rel="noreferrer" title={`Mở ${channel.name} trên YouTube`} className="group flex min-w-0 items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">{channel.avatar_url ? <img src={channel.avatar_url} alt="" className="size-8 shrink-0 rounded-lg object-cover" /> : <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-red-50 text-red-600"><Youtube className="size-4" /></span>}<div className="min-w-0"><p className="truncate font-semibold text-slate-900 group-hover:text-indigo-600 group-hover:underline">{channel.name}</p><p className="truncate text-xs text-slate-400" title={channel.custom_url ?? channel.youtube_channel_id}>{channel.custom_url ?? channel.youtube_channel_id}</p></div></a></TableCell>
@@ -351,6 +372,7 @@ function ChannelDataRow({ channel, canManage, canDelete, canRevealCredentials, c
     <TableCell className="font-medium"><MetricTrend value={channel.subscriber_count} change={channel.subscriber_change ?? 0} /></TableCell>
     <TableCell><div className="flex items-center justify-between gap-1"><MetricTrend value={channelViewCount(channel)} change={channel.public_video_view_count == null ? channel.view_change ?? 0 : 0} />{canManage && <Button type="button" variant="ghost" size="icon-sm" onClick={onScanViews} disabled={scanningViews} title={channel.public_video_view_scanned_at ? `Quét lại toàn bộ video · lần cuối ${relativeDate(channel.public_video_view_scanned_at)}` : "Quét toàn bộ video và cộng tổng lượt xem"} className="size-6 shrink-0 text-indigo-600">{scanningViews ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}</Button>}</div></TableCell>
     <TableCell><MetricTrend value={channel.video_count} change={channel.video_change ?? 0} format={(value) => value.toLocaleString("vi-VN")} /></TableCell>
+    <TableCell><PublishingPlanCell channel={channel} canManage={canManage} loading={markingPublished} onMarkPublished={onMarkPublished} /></TableCell>
     <TableCell>{relativeDate(channel.last_video_at)}</TableCell>
     <TableCell><div className="flex justify-end gap-0">{canManage && <><Button onClick={onEdit} variant="ghost" size="icon-sm" title="Chỉnh sửa" className="size-5"><Pencil className="size-3" /></Button><Button onClick={onSync} variant="ghost" size="icon-sm" title="Đồng bộ" className="size-5"><RefreshCw className="size-3" /></Button></>}{canDelete && <Button onClick={onRemove} variant="ghost" size="icon-sm" title="Xóa kênh" className="size-5 text-red-600 hover:text-red-700"><Trash2 className="size-3" /></Button>}<Button asChild variant="ghost" size="icon-sm" className="size-5"><a href={channel.youtube_url} target="_blank" rel="noreferrer" title="Mở trên YouTube"><ExternalLink className="size-3" /></a></Button></div></TableCell>
   </TableRow>;
@@ -401,6 +423,7 @@ function channelSortValue(channel: Channel, key: SortKey): string | number | nul
   if (key === "subscribers") return channel.subscriber_count;
   if (key === "views") return channelViewCount(channel);
   if (key === "videos") return channel.video_count;
+  if (key === "nextPublish") return channel.next_publish_date ? Date.parse(`${channel.next_publish_date}T00:00:00Z`) : null;
   if (key === "lastVideo") return channel.last_video_at ? Date.parse(channel.last_video_at) : null;
   return null;
 }
@@ -410,6 +433,32 @@ function YoutubeQuotaBadge({ quota }: { quota: YoutubeQuotaStatus }) {
   const warning = !low && quota.remaining / quota.limit <= 0.25;
   const tone = low ? "border-rose-200 bg-rose-50 text-rose-700" : warning ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700";
   return <div title={`Quota ước tính do ChannelOS sử dụng · đã dùng ${quota.used.toLocaleString("vi-VN")} · reset 00:00 Pacific`} className={`flex h-10 items-center gap-2 rounded-lg border px-3 text-sm ${tone}`}><Gauge className="size-4 shrink-0" /><span className="whitespace-nowrap"><span className="font-medium">Quota còn</span> <strong>{quota.remaining.toLocaleString("vi-VN")}</strong><span className="text-current/60">/{quota.limit.toLocaleString("vi-VN")}</span></span><span className="rounded bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">ước tính</span></div>;
+}
+
+function PublishingPlanCell({ channel, canManage, loading, onMarkPublished }: { channel: Channel; canManage: boolean; loading: boolean; onMarkPublished: () => void }) {
+  if (!channel.publish_interval_days || !channel.next_publish_date) return <span className="text-slate-400">—</span>;
+  const days = daysUntilPublish(channel.next_publish_date);
+  const label = days < 0 ? `Trễ ${Math.abs(days)} ngày` : days === 0 ? "Hôm nay" : `Còn ${days} ngày`;
+  const tone = days < 0 ? "text-rose-600" : days <= channel.publish_reminder_days ? "text-amber-600" : "text-slate-500";
+  return <div className="flex min-w-0 items-center justify-between gap-1"><div className="min-w-0" title={`Mỗi ${channel.publish_interval_days} ngày · nhắc trước ${channel.publish_reminder_days} ngày`}><p className="truncate text-xs font-semibold text-slate-800">{formatPublishDate(channel.next_publish_date)}</p><p className={`truncate text-[11px] ${tone}`}>{label} · {channel.publish_interval_days} ngày/lần</p></div>{canManage && <Button type="button" variant="ghost" size="icon-sm" onClick={onMarkPublished} disabled={loading} title="Đánh dấu đã đăng và chuyển lịch kế tiếp" className="size-6 shrink-0 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700">{loading ? <LoaderCircle className="animate-spin" /> : <Check />}</Button>}</div>;
+}
+
+function localDateInputValue(addDays = 0): string {
+  const date = new Date();
+  date.setDate(date.getDate() + addDays);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function daysUntilPublish(date: string): number {
+  return Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${localDateInputValue()}T00:00:00Z`)) / 86_400_000);
+}
+
+function formatPublishDate(date: string): string {
+  const [year, month, day] = date.split("-");
+  return `${day}/${month}/${year}`;
 }
 
 function channelViewCount(channel: Channel): number {
@@ -434,7 +483,7 @@ function UnlinkedAccountRow({ account, canManage, canRevealCredentials, canDrag,
     <TableCell><SecretCell accountId={account.id} kind="twoFactorSecret" hasSecret={account.two_factor_enabled} canReveal={canRevealCredentials} onSaved={onAccountSaved} /></TableCell>
     <TableCell><EditableAccountCell accountId={account.id} field="phone" value={account.phone} canEdit={canManage} onSaved={onAccountSaved} /></TableCell>
     <TableCell><span title="Chưa có kênh" className="block max-w-full truncate rounded-full bg-amber-100 px-2 py-1 text-center text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">Chưa có kênh</span></TableCell>
-    <TableCell colSpan={5} className="text-center text-slate-300">—</TableCell>
+    <TableCell colSpan={6} className="text-center text-slate-300">—</TableCell>
     <TableCell>{canManage && <Button type="button" variant="ghost" size="icon-sm" className="size-5" onClick={() => onAddChannel(account.id)} title="Tạo kênh và liên kết tài khoản"><Plus className="size-3" /></Button>}</TableCell>
   </TableRow>;
 }
@@ -710,11 +759,25 @@ function EditChannelSheet({ channel, niches, accounts, onOpenChange, onSaved }: 
   const [nicheId, setNicheId] = useState(channel.niche_id ?? "");
   const [accountId, setAccountId] = useState(channel.account_id ?? "");
   const [notes, setNotes] = useState(channel.notes ?? "");
+  const [scheduleEnabled, setScheduleEnabled] = useState(Boolean(channel.publish_interval_days && channel.next_publish_date));
+  const [publishIntervalDays, setPublishIntervalDays] = useState(String(channel.publish_interval_days ?? 3));
+  const [nextPublishDate, setNextPublishDate] = useState(channel.next_publish_date ?? localDateInputValue(1));
+  const [publishReminderDays, setPublishReminderDays] = useState(String(channel.publish_reminder_days ?? 1));
   const [loading, setLoading] = useState(false);
   const save = async () => {
+    const intervalDays = Number(publishIntervalDays);
+    const reminderDays = Number(publishReminderDays);
+    if (scheduleEnabled && (!Number.isInteger(intervalDays) || intervalDays < 1 || intervalDays > 365 || !nextPublishDate)) {
+      toast.error("Hãy chọn ngày đăng kế tiếp và chu kỳ từ 1 đến 365 ngày.");
+      return;
+    }
+    if (!Number.isInteger(reminderDays) || reminderDays < 0 || reminderDays > 30) {
+      toast.error("Số ngày nhắc trước phải từ 0 đến 30.");
+      return;
+    }
     setLoading(true);
     try {
-      const response = await fetch(`/api/channels/${channel.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status, nicheId: nicheId || null, accountId: accountId || null, notes: notes || null }) });
+      const response = await fetch(`/api/channels/${channel.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status, nicheId: nicheId || null, accountId: accountId || null, notes: notes || null, publishIntervalDays: scheduleEnabled ? intervalDays : null, nextPublishDate: scheduleEnabled ? nextPublishDate : null, publishReminderDays: reminderDays }) });
       const body = await response.json() as { error?: string };
       if (!response.ok) throw new Error(body.error || "Không thể lưu thay đổi.");
       toast.success("Đã cập nhật kênh.");
@@ -725,7 +788,11 @@ function EditChannelSheet({ channel, niches, accounts, onOpenChange, onSaved }: 
       setLoading(false);
     }
   };
-  return <Sheet open onOpenChange={onOpenChange}><SheetContent className="w-full overflow-y-auto sm:max-w-xl"><SheetHeader className="border-b border-slate-200 px-6 py-5"><SheetTitle>Chỉnh sửa {channel.name}</SheetTitle><SheetDescription>Cập nhật trạng thái, chủ đề và ghi chú vận hành.</SheetDescription></SheetHeader><div className="space-y-5 px-6 py-5"><label className="block"><span className="mb-1.5 block text-sm font-medium text-slate-700">Tài khoản vận hành</span><select value={accountId} onChange={(event) => setAccountId(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="">Chưa liên kết tài khoản</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.email}</option>)}</select></label><ChannelFields status={status} setStatus={setStatus} nicheId={nicheId} setNicheId={setNicheId} notes={notes} setNotes={setNotes} niches={niches} /></div><SheetFooter className="border-t border-slate-200 px-6 py-4"><Button variant="outline" onClick={() => onOpenChange(false)}>Hủy</Button><Button onClick={() => void save()} disabled={loading} className="bg-indigo-600 hover:bg-indigo-700">{loading && <LoaderCircle className="animate-spin" />} Lưu thay đổi</Button></SheetFooter></SheetContent></Sheet>;
+  return <Sheet open onOpenChange={onOpenChange}><SheetContent className="w-full overflow-y-auto sm:max-w-xl"><SheetHeader className="border-b border-slate-200 px-6 py-5"><SheetTitle>Chỉnh sửa {channel.name}</SheetTitle><SheetDescription>Cập nhật trạng thái, chủ đề, lịch đăng và ghi chú vận hành.</SheetDescription></SheetHeader><div className="space-y-5 px-6 py-5"><label className="block"><span className="mb-1.5 block text-sm font-medium text-slate-700">Tài khoản vận hành</span><select value={accountId} onChange={(event) => setAccountId(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="">Chưa liên kết tài khoản</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.email}</option>)}</select></label><ChannelFields status={status} setStatus={setStatus} nicheId={nicheId} setNicheId={setNicheId} notes={notes} setNotes={setNotes} niches={niches} /><PublishingPlanFields enabled={scheduleEnabled} setEnabled={setScheduleEnabled} intervalDays={publishIntervalDays} setIntervalDays={setPublishIntervalDays} nextDate={nextPublishDate} setNextDate={setNextPublishDate} reminderDays={publishReminderDays} setReminderDays={setPublishReminderDays} /></div><SheetFooter className="border-t border-slate-200 px-6 py-4"><Button variant="outline" onClick={() => onOpenChange(false)}>Hủy</Button><Button onClick={() => void save()} disabled={loading} className="bg-indigo-600 hover:bg-indigo-700">{loading && <LoaderCircle className="animate-spin" />} Lưu thay đổi</Button></SheetFooter></SheetContent></Sheet>;
+}
+
+function PublishingPlanFields({ enabled, setEnabled, intervalDays, setIntervalDays, nextDate, setNextDate, reminderDays, setReminderDays }: { enabled: boolean; setEnabled: (value: boolean) => void; intervalDays: string; setIntervalDays: (value: string) => void; nextDate: string; setNextDate: (value: string) => void; reminderDays: string; setReminderDays: (value: string) => void }) {
+  return <section className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4"><label className="flex cursor-pointer items-center justify-between gap-3"><span className="flex items-center gap-2"><span className="grid size-8 place-items-center rounded-lg bg-white text-indigo-600"><CalendarClock className="size-4" /></span><span><span className="block text-sm font-semibold text-slate-900">Lịch đăng định kỳ</span><span className="block text-xs text-slate-500">Tạo cảnh báo trước ngày đăng</span></span></span><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} className="size-4 accent-indigo-600" /></label>{enabled && <div className="mt-4 grid gap-3 sm:grid-cols-3"><label><span className="mb-1.5 block text-xs font-medium text-slate-600">Mỗi bao nhiêu ngày</span><input type="number" min={1} max={365} value={intervalDays} onChange={(event) => setIntervalDays(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-300" /></label><label><span className="mb-1.5 block text-xs font-medium text-slate-600">Ngày đăng kế tiếp</span><input type="date" value={nextDate} onChange={(event) => setNextDate(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-300" /></label><label><span className="mb-1.5 block text-xs font-medium text-slate-600">Nhắc trước (ngày)</span><input type="number" min={0} max={30} value={reminderDays} onChange={(event) => setReminderDays(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-300" /></label></div>}<p className="mt-3 text-xs leading-5 text-indigo-700">Sau khi video được đăng, bấm dấu ✓ ở cột Lịch đăng hoặc nút “Đã đăng” trong Trung tâm cảnh báo để tự chuyển sang kỳ tiếp theo.</p></section>;
 }
 
 function ChannelFields({ status, setStatus, nicheId, setNicheId, notes, setNotes, niches }: { status: ChannelStatus; setStatus: (value: ChannelStatus) => void; nicheId: string; setNicheId: (value: string) => void; notes: string; setNotes: (value: string) => void; niches: Niche[] }) {

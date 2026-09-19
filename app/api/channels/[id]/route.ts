@@ -10,6 +10,9 @@ const updateSchema = z.object({
   nicheId: z.string().uuid().nullable().optional(),
   accountId: z.string().uuid().nullable().optional(),
   notes: z.string().max(4000).nullable().optional(),
+  publishIntervalDays: z.number().int().min(1).max(365).nullable().optional(),
+  nextPublishDate: z.string().date().nullable().optional(),
+  publishReminderDays: z.number().int().min(0).max(30).optional(),
 }).refine((value) => Object.keys(value).length > 0, "Không có thay đổi để lưu.");
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {

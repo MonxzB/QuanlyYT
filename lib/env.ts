@@ -6,7 +6,8 @@ const serverSchema = z.object({
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
   SUPABASE_SECRET_KEY: z.string().min(1),
   ACCOUNT_SECRETS_ENCRYPTION_KEY: z.string().min(32).optional(),
-  YOUTUBE_API_KEY: z.string().min(1)
+  YOUTUBE_API_KEY: z.string().min(1),
+  YOUTUBE_DAILY_QUOTA: z.coerce.number().int().positive().default(10_000)
 });
 
 export type ServerEnv = z.infer<typeof serverSchema>;

@@ -33,6 +33,7 @@
    - `011_video_source_identity.sql`
    - `012_video_tags.sql`
    - `013_channel_video_view_scan.sql`
+   - `014_youtube_quota_usage.sql`
 3. Tạo người dùng trong Supabase Auth.
 4. Cấp quyền `admin` cho người dùng đầu tiên trong SQL Editor:
 
@@ -54,11 +55,13 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable-key>
 SUPABASE_SECRET_KEY=<secret-key>
 ACCOUNT_SECRETS_ENCRYPTION_KEY=<chuỗi-ngẫu-nhiên-tối-thiểu-32-ký-tự>
 YOUTUBE_API_KEY=<youtube-data-api-key>
+YOUTUBE_DAILY_QUOTA=10000
 ```
 
 `SUPABASE_SECRET_KEY`, `ACCOUNT_SECRETS_ENCRYPTION_KEY` và `YOUTUBE_API_KEY` chỉ được dùng ở server. Không thêm tiền tố `NEXT_PUBLIC_`. `ACCOUNT_SECRETS_ENCRYPTION_KEY` phải là chuỗi ngẫu nhiên ổn định, tối thiểu 32 ký tự. Secret định dạng cũ được đọc bằng khóa cũ và tự mã hóa lại bằng khóa riêng khi admin xem lần đầu. Không thay đổi hoặc xóa các khóa này nếu chưa chạy quy trình rotate dữ liệu.
 
 Trong Google Cloud, bật **YouTube Data API v3**, tạo API key và giới hạn key chỉ được gọi API này.
+`YOUTUBE_DAILY_QUOTA` là hạn mức ngày của project Google Cloud (mặc định 10.000 đơn vị). ChannelOS dùng giá trị này để hiển thị quota ước tính còn lại; bộ đếm chỉ bao gồm request YouTube do ChannelOS thực hiện và reset lúc 00:00 theo múi giờ Pacific.
 
 ## Chạy project
 

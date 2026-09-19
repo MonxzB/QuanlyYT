@@ -1,8 +1,8 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, CirclePlay as Youtube, ExternalLink, Eye, EyeOff, FileSpreadsheet, GripVertical, LoaderCircle, Minus, Pencil, Plus, RefreshCw, Search, Trash2, TrendingDown, TrendingUp, Upload, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, CirclePlay as Youtube, ExternalLink, Eye, EyeOff, FileSpreadsheet, Gauge, GripVertical, LoaderCircle, Minus, Pencil, Plus, RefreshCw, Search, Trash2, TrendingDown, TrendingUp, Upload, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ type SortDirection = "asc" | "desc";
 type ChannelBoardRow = { kind: "channel"; channel: Channel } | { kind: "account"; account: Account };
 type VideoViewScanProgress = { done: boolean; processedVideos: number; totalViews: number };
 type SyncFailure = { id: string; name: string; stage: "Đồng bộ dữ liệu" | "Quét lượt xem"; error: string };
+type YoutubeQuotaStatus = { usageDate: string; used: number; limit: number; remaining: number; usedPercent: number; updatedAt: string | null; estimated: true };
 
 async function runVideoViewScan(channelId: string, onProgress?: (progress: VideoViewScanProgress) => void): Promise<VideoViewScanProgress> {
   let action: "start" | "continue" = "start";
@@ -74,6 +75,17 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
   const [pendingAccountId, setPendingAccountId] = useState("");
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [youtubeQuota, setYoutubeQuota] = useState<YoutubeQuotaStatus | null>(null);
+
+  const refreshYoutubeQuota = useCallback(async () => {
+    try {
+      const response = await fetch("/api/youtube/quota", { cache: "no-store" });
+      const body = await response.json() as { data?: YoutubeQuotaStatus };
+      if (response.ok && body.data) setYoutubeQuota(body.data);
+    } catch {
+      // Quota chỉ là thông tin hỗ trợ; lỗi tải badge không được chặn quản lý kênh.
+    }
+  }, []);
 
   const fetchPage = async (page = 1, search = query, selectedStatus = status) => {
     setLoading(true);
@@ -97,6 +109,15 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, status]);
+
+  useEffect(() => {
+    const initialId = window.setTimeout(() => void refreshYoutubeQuota(), 0);
+    const id = window.setInterval(() => void refreshYoutubeQuota(), 60_000);
+    return () => {
+      window.clearTimeout(initialId);
+      window.clearInterval(id);
+    };
+  }, [refreshYoutubeQuota]);
 
   const statuses = useMemo(() => Object.entries(statusLabels) as Array<[ChannelStatus, string]>, []);
   const accountItems = useMemo(() => {
@@ -146,6 +167,8 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
       await fetchPage(result.page);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Đồng bộ thất bại.", { id: toastId });
+    } finally {
+      await refreshYoutubeQuota();
     }
   };
 
@@ -207,6 +230,7 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
       toast.error(error instanceof Error ? error.message : "Không thể đồng bộ tất cả kênh.", { id: toastId });
     } finally {
       setSyncingAll(false);
+      await refreshYoutubeQuota();
     }
   };
 
@@ -224,6 +248,7 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
       toast.error(error instanceof Error ? error.message : "Không thể quét lượt xem video.", { id: toastId });
     } finally {
       setScanningViewsId(null);
+      await refreshYoutubeQuota();
     }
   };
 
@@ -274,7 +299,7 @@ export function ChannelsLive({ initial, niches, accounts, linkedAccountIds, canM
   return <div className="space-y-4">
     <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
       <div><h2 className="text-2xl font-semibold tracking-tight text-slate-950">Kênh YouTube</h2><p className="mt-1 text-sm text-slate-500">Kéo biểu tượng bên trái để sắp xếp chung kênh và tài khoản chưa có kênh.</p></div>
-      {canManage && <div className="flex flex-wrap gap-2">{canDelete && <Button variant="outline" onClick={() => void syncAll()} disabled={syncingAll}>{syncingAll ? <LoaderCircle className="animate-spin" /> : <RefreshCw />} Đồng bộ tất cả</Button>}<Button variant="outline" onClick={() => setImportOpen(true)}><FileSpreadsheet /> Nhập Excel</Button><Button variant="outline" onClick={() => setAddAccountOpen(true)}><Plus /> Thêm tài khoản</Button><Button onClick={() => { setPendingAccountId(""); setAddOpen(true); }} className="bg-indigo-600 hover:bg-indigo-700"><Plus /> Thêm kênh</Button></div>}
+      {canManage && <div className="flex flex-wrap items-center gap-2">{youtubeQuota && <YoutubeQuotaBadge quota={youtubeQuota} />}{canDelete && <Button variant="outline" onClick={() => void syncAll()} disabled={syncingAll}>{syncingAll ? <LoaderCircle className="animate-spin" /> : <RefreshCw />} Đồng bộ tất cả</Button>}<Button variant="outline" onClick={() => setImportOpen(true)}><FileSpreadsheet /> Nhập Excel</Button><Button variant="outline" onClick={() => setAddAccountOpen(true)}><Plus /> Thêm tài khoản</Button><Button onClick={() => { setPendingAccountId(""); setAddOpen(true); }} className="bg-indigo-600 hover:bg-indigo-700"><Plus /> Thêm kênh</Button></div>}
     </div>
     {syncFailures.length > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950"><div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" /><div className="min-w-0 flex-1"><p className="font-semibold">{syncFailures.length} kênh cần kiểm tra lại</p><div className="mt-2 space-y-1.5">{syncFailures.map((failure) => <div key={`${failure.id}-${failure.stage}`} className="text-sm"><span className="font-semibold">{failure.name}</span><span className="text-amber-700"> · {failure.stage}: {failure.error}</span></div>)}</div></div><Button type="button" variant="ghost" size="icon-sm" onClick={() => setSyncFailures([])} title="Đóng thông báo" className="shrink-0 text-amber-700 hover:bg-amber-100"><X /></Button></div></div>}
     <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-3"><div className="relative min-w-60 flex-1"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm theo tên, handle hoặc Channel ID…" className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none focus:border-indigo-300 focus:bg-white" /></div><select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="">Tất cả trạng thái</option>{statuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{sortKey && <Button type="button" variant="ghost" onClick={() => { setSortKey(null); setSortDirection("asc"); }}>Bỏ sắp xếp</Button>}</div>
@@ -378,6 +403,13 @@ function channelSortValue(channel: Channel, key: SortKey): string | number | nul
   if (key === "videos") return channel.video_count;
   if (key === "lastVideo") return channel.last_video_at ? Date.parse(channel.last_video_at) : null;
   return null;
+}
+
+function YoutubeQuotaBadge({ quota }: { quota: YoutubeQuotaStatus }) {
+  const low = quota.remaining / quota.limit <= 0.1;
+  const warning = !low && quota.remaining / quota.limit <= 0.25;
+  const tone = low ? "border-rose-200 bg-rose-50 text-rose-700" : warning ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return <div title={`Quota ước tính do ChannelOS sử dụng · đã dùng ${quota.used.toLocaleString("vi-VN")} · reset 00:00 Pacific`} className={`flex h-10 items-center gap-2 rounded-lg border px-3 text-sm ${tone}`}><Gauge className="size-4 shrink-0" /><span className="whitespace-nowrap"><span className="font-medium">Quota còn</span> <strong>{quota.remaining.toLocaleString("vi-VN")}</strong><span className="text-current/60">/{quota.limit.toLocaleString("vi-VN")}</span></span><span className="rounded bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">ước tính</span></div>;
 }
 
 function channelViewCount(channel: Channel): number {

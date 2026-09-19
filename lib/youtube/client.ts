@@ -1,6 +1,7 @@
 import "server-only";
 import { AppError } from "@/lib/api-error";
 import { getServerEnv } from "@/lib/env";
+import { recordYoutubeQuotaUsage } from "@/lib/youtube/quota";
 
 const API_ROOT = "https://www.googleapis.com/youtube/v3";
 
@@ -75,6 +76,7 @@ async function youtubeGet<T>(path: string, params: Record<string, string>): Prom
     }
     throw new AppError("YOUTUBE_NETWORK", "Không thể kết nối YouTube API.", 502);
   }
+  await recordYoutubeQuotaUsage(1);
   const body = await response.json() as ApiResponse<T>;
   if (!response.ok || body.error) {
     const reason = body.error?.errors?.[0]?.reason;
